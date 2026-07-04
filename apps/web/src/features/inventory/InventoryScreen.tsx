@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InventoryItem } from "@fridgy/shared";
-import { getInventory, setExpiryOverride } from "../../lib/api";
+import { consumeItems, getInventory, setExpiryOverride } from "../../lib/api";
 
 interface InventoryScreenProps {
   onDashboardReturn: () => void;
@@ -53,6 +53,15 @@ export function InventoryScreen({ onDashboardReturn }: InventoryScreenProps) {
     mutationFn: ({ name, days }: { name: string; days: number }) =>
       setExpiryOverride(name, days),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["inventory"] }),
+  });
+
+  const consume = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: "consumed" | "discarded" }) =>
+      consumeItems([id], action),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["recipes"] });
+    },
   });
 
   const handleAdjust = (item: InventoryItem) => {
@@ -128,6 +137,20 @@ export function InventoryScreen({ onDashboardReturn }: InventoryScreenProps) {
                   className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:border-gray-400 disabled:opacity-50"
                 >
                   조정
+                </button>
+                <button
+                  onClick={() => consume.mutate({ id: item.id, action: "consumed" })}
+                  disabled={consume.isPending}
+                  className="rounded-md border border-green-200 bg-green-50 px-2 py-1 text-xs text-green-700 hover:border-green-300 disabled:opacity-50"
+                >
+                  소비
+                </button>
+                <button
+                  onClick={() => consume.mutate({ id: item.id, action: "discarded" })}
+                  disabled={consume.isPending}
+                  className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700 hover:border-red-300 disabled:opacity-50"
+                >
+                  폐기
                 </button>
               </div>
             </li>

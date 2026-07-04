@@ -58,6 +58,22 @@ export interface HealthResponse {
   version: string;
 }
 
+/** 추천 레시피 (F4) — 임박 재료 우선 소진 */
+export interface Recipe {
+  title: string;
+  usedIngredients: string[]; // 이 요리가 쓰는 보유 재료
+  expiringUsed: string[]; // 소진하는 임박 재료 (상위 정렬 기준)
+  missing: string[]; // 부족한 재료
+  steps: string[]; // 조리 단계
+}
+
+/** GET /recipes/suggest 응답 */
+export interface RecipeSuggestion {
+  items: Recipe[];
+  expiringNames: string[]; // 정렬 기준이 된 임박 재료
+  cached: boolean; // 캐시 재사용 여부
+}
+
 /** 임박 알림 (F3) */
 export interface Notification {
   id: string;
