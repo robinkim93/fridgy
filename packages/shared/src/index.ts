@@ -48,6 +48,7 @@ export interface ReceiptJob {
   id: string;
   status: ReceiptJobStatus;
   items: ParsedItem[];
+  error?: string | null;
 }
 
 /** GET /health 응답 */
