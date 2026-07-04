@@ -71,3 +71,43 @@ class ExpiryOverrideResponse(BaseModel):
     itemName: str
     customDays: int
     updated: int  # 즉시 재계산된 활성 품목 수
+
+
+# ── S3 임박 알림 (F3) ──────────────────────────────────────────────────────
+class PushKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class PushSubscribeRequest(BaseModel):
+    """브라우저 PushSubscription.toJSON() 형태."""
+
+    endpoint: str
+    keys: PushKeys
+
+
+class PushSubscribeResponse(BaseModel):
+    ok: bool = True
+
+
+class NotificationResponse(BaseModel):
+    id: str
+    type: str = "expiring"
+    title: str
+    body: str
+    itemIds: list[str] = Field(default_factory=list)
+    readAt: str | None = None
+    createdAt: str
+
+
+class NotificationListResponse(BaseModel):
+    items: list[NotificationResponse] = Field(default_factory=list)
+    unread: int = 0
+
+
+class NotifyExpiringResponse(BaseModel):
+    """배치 결과 요약(cron 로그·수동 실행 확인용)."""
+
+    usersNotified: int
+    pushSent: int
+    itemsFlagged: int

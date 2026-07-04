@@ -271,6 +271,127 @@ def list_inventory(fridge_id: str) -> list[dict]:
     return res.data or []
 
 
+# ── 푸시 구독·알림 (S3) ────────────────────────────────────────────────────
+def upsert_push_subscription(
+    user_id: str, endpoint: str, p256dh: str, auth: str
+) -> None:
+    """Web Push 구독 저장. endpoint 유니크 → 재구독 시 소유자·키 갱신."""
+    c = get_client()
+    c.table("push_subscriptions").upsert(
+        {"user_id": user_id, "endpoint": endpoint, "p256dh": p256dh, "auth": auth},
+        on_conflict="endpoint",
+    ).execute()
+
+
+def delete_push_subscription(endpoint: str) -> None:
+    """만료/해지된 구독 정리(푸시 404·410 또는 사용자 구독 해제)."""
+    get_client().table("push_subscriptions").delete().eq(
+        "endpoint", endpoint
+    ).execute()
+
+
+def list_push_subscriptions(user_id: str) -> list[dict]:
+    """유저의 모든 기기 구독을 pywebpush 입력 형태로 반환."""
+    c = get_client()
+    rows = (
+        c.table("push_subscriptions")
+        .select("endpoint, p256dh, auth")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return [
+        {"endpoint": r["endpoint"], "keys": {"p256dh": r["p256dh"], "auth": r["auth"]}}
+        for r in (rows.data or [])
+    ]
+
+
+def insert_notification(
+    user_id: str, title: str, body: str, item_ids: list[str]
+) -> str:
+    """인앱 알림함에 알림 1건 적재. id 반환."""
+    c = get_client()
+    res = (
+        c.table("notifications")
+        .insert(
+            {"user_id": user_id, "type": "expiring", "title": title, "body": body,
+             "item_ids": item_ids}
+        )
+        .execute()
+    )
+    return res.data[0]["id"]
+
+
+def list_notifications(user_id: str, limit: int = 30) -> tuple[list[dict], int]:
+    """최근 알림 목록과 미읽음 수 반환."""
+    c = get_client()
+    rows = (
+        c.table("notifications")
+        .select("id, type, title, body, item_ids, read_at, created_at")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    data = rows.data or []
+    unread = sum(1 for r in data if not r.get("read_at"))
+    return data, unread
+
+
+def mark_notification_read(user_id: str, notif_id: str) -> bool:
+    """알림 읽음 처리(본인 것만). 갱신 여부 반환."""
+    c = get_client()
+    res = (
+        c.table("notifications")
+        .update({"read_at": datetime.now(timezone.utc).isoformat()})
+        .eq("id", notif_id)
+        .eq("user_id", user_id)
+        .is_("read_at", "null")
+        .execute()
+    )
+    return bool(res.data)
+
+
+def load_expiring_by_user(today: date, threshold_days: int) -> dict[str, list[dict]]:
+    """임박(threshold 이내) + 미발송(오늘 아직) 활성 품목을 유저별로 그룹핑.
+
+    inventory_items → fridges(owner_user_id) 임베드로 소유자를 얻는다.
+    반환: { user_id: [ {id, name, expire_at(date)} ] }
+    """
+    c = get_client()
+    cutoff = (today + timedelta(days=threshold_days)).isoformat()
+    rows = (
+        c.table("inventory_items")
+        .select("id, name, expire_at, notified_at, fridges(owner_user_id)")
+        .eq("status", "active")
+        .not_.is_("expire_at", "null")
+        .lte("expire_at", cutoff)
+        .execute()
+    )
+    grouped: dict[str, list[dict]] = {}
+    today_iso = today.isoformat()
+    for r in rows.data or []:
+        if r.get("notified_at") and r["notified_at"] >= today_iso:
+            continue  # 오늘 이미 발송함(cron 재실행 중복 방지)
+        fridge = r.get("fridges") or {}
+        owner = fridge.get("owner_user_id")
+        if not owner:
+            continue
+        grouped.setdefault(owner, []).append(
+            {"id": r["id"], "name": r["name"],
+             "expire_at": date.fromisoformat(r["expire_at"])}
+        )
+    return grouped
+
+
+def mark_items_notified(item_ids: list[str], today: date) -> None:
+    """발송한 품목에 notified_at=today 기록(중복 발송 가드)."""
+    if not item_ids:
+        return
+    get_client().table("inventory_items").update(
+        {"notified_at": today.isoformat()}
+    ).in_("id", item_ids).execute()
+
+
 def normalized_to_parsed(n: Normalized) -> dict:
     """정규화 결과 → API/보정 UI용 ParsedItem(camelCase, packages/shared 계약)."""
     return {

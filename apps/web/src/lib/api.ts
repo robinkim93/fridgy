@@ -1,6 +1,7 @@
 import type {
   HealthResponse,
   InventoryItem,
+  Notification,
   ParsedItem,
   ReceiptJob,
   ReceiptJobStatus,
@@ -121,4 +122,64 @@ export async function setExpiryOverride(
     throw new Error(`소비기한 보정 실패 (${res.status}): ${await res.text()}`);
   }
   return res.json();
+}
+
+/** VAPID 공개키 조회 (무인증) */
+export async function getVapidPublicKey(): Promise<string> {
+  const res = await fetch(`${API_BASE}/push/public-key`);
+  if (!res.ok) {
+    throw new Error(`VAPID 키 조회 실패 (${res.status}): ${await res.text()}`);
+  }
+  const data: { publicKey: string } = await res.json();
+  return data.publicKey;
+}
+
+/** 푸시 구독 등록 */
+export async function subscribePush(
+  subscription: unknown
+): Promise<void> {
+  const res = await authenticatedFetch(`${API_BASE}/push/subscribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(subscription),
+  });
+  if (!res.ok) {
+    throw new Error(`푸시 구독 실패 (${res.status}): ${await res.text()}`);
+  }
+}
+
+/** 푸시 구독 해제 */
+export async function unsubscribePush(endpoint: string): Promise<void> {
+  const res = await authenticatedFetch(`${API_BASE}/push/unsubscribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint }),
+  });
+  if (!res.ok) {
+    throw new Error(`푸시 구독 해제 실패 (${res.status}): ${await res.text()}`);
+  }
+}
+
+/** 알림 목록 조회 */
+export async function getNotifications(): Promise<{
+  items: Notification[];
+  unread: number;
+}> {
+  const res = await authenticatedFetch(`${API_BASE}/notifications`);
+  if (!res.ok) {
+    throw new Error(`알림 조회 실패 (${res.status}): ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/** 알림을 읽음으로 표시 */
+export async function markNotificationRead(id: string): Promise<void> {
+  const res = await authenticatedFetch(`${API_BASE}/notifications/${id}/read`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    throw new Error(`알림 읽음 표시 실패 (${res.status}): ${await res.text()}`);
+  }
 }

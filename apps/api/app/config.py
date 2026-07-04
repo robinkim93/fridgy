@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     # 내부 배치 엔드포인트 보호 토큰 (GitHub Actions cron)
     internal_token: str = ""
 
+    # Web Push (VAPID) — S3 임박 알림. 키는 배포 환경 시크릿에 등록.
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = "mailto:hello@fridgy.app"
+    # 임박 판정: expire_at - today <= threshold 이면 알림 대상(일).
+    expiry_threshold_days: int = 3
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

@@ -57,3 +57,14 @@ export interface HealthResponse {
   service: string;
   version: string;
 }
+
+/** 임박 알림 (F3) */
+export interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  itemIds: string[];
+  readAt: string | null; // ISO 8601, null이면 미읽음
+  createdAt: string; // ISO 8601
+}
