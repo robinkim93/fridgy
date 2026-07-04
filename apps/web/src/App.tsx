@@ -5,8 +5,10 @@ import { useAuth } from "./features/auth/useAuth";
 import { LoginScreen } from "./features/auth/LoginScreen";
 import { ReceiptFlow } from "./features/receipt/ReceiptFlow";
 import { InventoryScreen } from "./features/inventory/InventoryScreen";
+import { NotificationsScreen } from "./features/notifications/NotificationsScreen";
+import { NotificationBanner } from "./features/notifications/NotificationBanner";
 
-type AppPage = "dashboard" | "receipt" | "inventory";
+type AppPage = "dashboard" | "receipt" | "inventory" | "notifications";
 
 // S1: 인증 + 영수증 재고 등록 UI
 export default function App() {
@@ -40,7 +42,7 @@ export default function App() {
     return <LoginScreen />;
   }
 
-  // 로그인됨 → 대시보드 또는 영수증 흐름
+  // 로그인됨 → 대시보드 또는 페이지 전환
   if (currentPage === "receipt") {
     return <ReceiptFlow onDashboardReturn={() => setCurrentPage("dashboard")} />;
   }
@@ -51,8 +53,18 @@ export default function App() {
     );
   }
 
+  if (currentPage === "notifications") {
+    return (
+      <NotificationsScreen
+        onDashboardReturn={() => setCurrentPage("dashboard")}
+      />
+    );
+  }
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-6">
+    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-6 py-8">
+      <NotificationBanner />
+
       <div className="text-center">
         <div className="text-5xl mb-2">🧊</div>
         <h1 className="text-2xl font-bold text-green-700">Fridgy</h1>
@@ -72,6 +84,13 @@ export default function App() {
           className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 font-medium text-gray-700 hover:border-gray-400"
         >
           📊 나의 재고 확인
+        </button>
+
+        <button
+          onClick={() => setCurrentPage("notifications")}
+          className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 font-medium text-gray-700 hover:border-gray-400"
+        >
+          🔔 알림
         </button>
       </div>
 
