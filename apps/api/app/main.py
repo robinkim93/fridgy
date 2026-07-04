@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import AuthUser, get_current_user
 from .config import Settings, get_settings
+from .routers import inventory, receipts
 
 settings = get_settings()
 
@@ -15,6 +16,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(receipts.router)
+app.include_router(inventory.router)
 
 
 @app.get("/health")
