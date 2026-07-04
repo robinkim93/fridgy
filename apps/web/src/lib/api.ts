@@ -5,6 +5,7 @@ import type {
   ParsedItem,
   ReceiptJob,
   ReceiptJobStatus,
+  RecipeSuggestion,
 } from "@fridgy/shared";
 import { supabase } from "./supabase";
 
@@ -120,6 +121,31 @@ export async function setExpiryOverride(
   });
   if (!res.ok) {
     throw new Error(`소비기한 보정 실패 (${res.status}): ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/** 임박 재료 우선 레시피 추천 (동일 재고면 서버가 캐시 재사용) */
+export async function getRecipeSuggestions(): Promise<RecipeSuggestion> {
+  const res = await authenticatedFetch(`${API_BASE}/recipes/suggest`);
+  if (!res.ok) {
+    throw new Error(`레시피 추천 실패 (${res.status}): ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/** 요리 후 사용 재료를 소비/폐기 처리 (F5) → 재고 상태 전이 */
+export async function consumeItems(
+  itemIds: string[],
+  action: "consumed" | "discarded" = "consumed"
+): Promise<{ updated: number }> {
+  const res = await authenticatedFetch(`${API_BASE}/inventory/consume`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ itemIds, action }),
+  });
+  if (!res.ok) {
+    throw new Error(`소비 처리 실패 (${res.status}): ${await res.text()}`);
   }
   return res.json();
 }

@@ -392,6 +392,79 @@ def mark_items_notified(item_ids: list[str], today: date) -> None:
     ).in_("id", item_ids).execute()
 
 
+# ── 레시피 추천 캐시·소비 처리 (S4) ───────────────────────────────────────
+def get_recipe_cache(fridge_id: str, snapshot_hash: str) -> list[dict] | None:
+    """스냅샷 해시로 캐시된 추천 결과 조회. 없으면 None(재고 상태 변경 = 캐시 미스)."""
+    c = get_client()
+    rows = (
+        c.table("recipe_cache")
+        .select("recipes")
+        .eq("fridge_id", fridge_id)
+        .eq("snapshot_hash", snapshot_hash)
+        .limit(1)
+        .execute()
+    )
+    return rows.data[0]["recipes"] if rows.data else None
+
+
+def set_recipe_cache(
+    fridge_id: str, snapshot_hash: str, recipes: list[dict]
+) -> None:
+    """추천 결과를 (fridge, 스냅샷) 키로 캐싱. 동일 키면 갱신(upsert)."""
+    get_client().table("recipe_cache").upsert(
+        {"fridge_id": fridge_id, "snapshot_hash": snapshot_hash, "recipes": recipes},
+        on_conflict="fridge_id,snapshot_hash",
+    ).execute()
+
+
+def consume_inventory_items(
+    user_id: str, fridge_id: str, item_ids: list[str], action: str
+) -> int:
+    """활성 품목을 소비/폐기 처리(F5).
+
+    - status 전이(active→consumed|discarded) + consumed_at 기록.
+    - waste_logs에 이벤트 적재(S6 리포트 원천). 폐기·소비 모두 남겨 소진율 계산에 쓴다.
+    스코프 강제: 본인 냉장고의 active 항목만 대상. 갱신 건수 반환.
+    """
+    if not item_ids or action not in ("consumed", "discarded"):
+        return 0
+    c = get_client()
+    rows = (
+        c.table("inventory_items")
+        .select("id, name, category, qty, unit")
+        .eq("fridge_id", fridge_id)
+        .eq("status", "active")
+        .in_("id", item_ids)
+        .execute()
+    )
+    targets = rows.data or []
+    if not targets:
+        return 0
+
+    now = datetime.now(timezone.utc).isoformat()
+    ids = [r["id"] for r in targets]
+    c.table("inventory_items").update(
+        {"status": action, "consumed_at": now}
+    ).in_("id", ids).execute()
+
+    c.table("waste_logs").insert(
+        [
+            {
+                "fridge_id": fridge_id,
+                "user_id": user_id,
+                "item_id": r["id"],
+                "name": r["name"],
+                "category": r.get("category", "기타"),
+                "qty": r.get("qty", 1),
+                "unit": r.get("unit", "개"),
+                "action": action,
+            }
+            for r in targets
+        ]
+    ).execute()
+    return len(targets)
+
+
 def normalized_to_parsed(n: Normalized) -> dict:
     """정규화 결과 → API/보정 UI용 ParsedItem(camelCase, packages/shared 계약)."""
     return {

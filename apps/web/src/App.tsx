@@ -5,10 +5,11 @@ import { useAuth } from "./features/auth/useAuth";
 import { LoginScreen } from "./features/auth/LoginScreen";
 import { ReceiptFlow } from "./features/receipt/ReceiptFlow";
 import { InventoryScreen } from "./features/inventory/InventoryScreen";
+import { RecipeScreen } from "./features/recipe/RecipeScreen";
 import { NotificationsScreen } from "./features/notifications/NotificationsScreen";
 import { NotificationBanner } from "./features/notifications/NotificationBanner";
 
-type AppPage = "dashboard" | "receipt" | "inventory" | "notifications";
+type AppPage = "dashboard" | "receipt" | "inventory" | "recipe" | "notifications";
 
 // S1: 인증 + 영수증 재고 등록 UI
 export default function App() {
@@ -53,6 +54,12 @@ export default function App() {
     );
   }
 
+  if (currentPage === "recipe") {
+    return (
+      <RecipeScreen onDashboardReturn={() => setCurrentPage("dashboard")} />
+    );
+  }
+
   if (currentPage === "notifications") {
     return (
       <NotificationsScreen
@@ -84,6 +91,13 @@ export default function App() {
           className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 font-medium text-gray-700 hover:border-gray-400"
         >
           📊 나의 재고 확인
+        </button>
+
+        <button
+          onClick={() => setCurrentPage("recipe")}
+          className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 font-medium text-gray-700 hover:border-gray-400"
+        >
+          🍳 레시피 추천
         </button>
 
         <button

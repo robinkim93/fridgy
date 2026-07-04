@@ -111,3 +111,29 @@ class NotifyExpiringResponse(BaseModel):
     usersNotified: int
     pushSent: int
     itemsFlagged: int
+
+
+# ── S4 레시피 추천 & 소비 처리 (F4·F5) ─────────────────────────────────────
+class RecipeResponse(BaseModel):
+    """추천 레시피 1건 (packages/shared Recipe 계약과 일치)."""
+
+    title: str
+    usedIngredients: list[str] = Field(default_factory=list)
+    expiringUsed: list[str] = Field(default_factory=list)  # 이 요리가 소진하는 임박 재료
+    missing: list[str] = Field(default_factory=list)
+    steps: list[str] = Field(default_factory=list)
+
+
+class RecipeSuggestResponse(BaseModel):
+    items: list[RecipeResponse] = Field(default_factory=list)
+    expiringNames: list[str] = Field(default_factory=list)  # 정렬 기준이 된 임박 재료
+    cached: bool = False  # 캐시 재사용 여부(비용 가드 확인용)
+
+
+class ConsumeRequest(BaseModel):
+    itemIds: list[str]
+    action: Literal["consumed", "discarded"] = "consumed"
+
+
+class ConsumeResponse(BaseModel):
+    updated: int  # 상태 전이된 활성 품목 수
