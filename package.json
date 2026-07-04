@@ -1,0 +1,20 @@
+{
+  "name": "fridgy",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Fridgy — 냉장고 식재료 유통기한 관리 + 임박 재료 레시피 추천 PWA",
+  "workspaces": [
+    "packages/*",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w apps/web",
+    "build:web": "npm run build -w apps/web",
+    "build:shared": "npm run build -w packages/shared",
+    "dev:api": "cd apps/api && uvicorn app.main:app --reload",
+    "typecheck": "npm run -ws --if-present typecheck"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,19 @@
+name: 임박 알림 배치 (S3)
+
+# 03_개발계획.md S3: 상시 스케줄러 없이 cron으로 배치 엔드포인트 호출 → Web Push ($0)
+on:
+  schedule:
+    - cron: "0 0 * * *" # 매일 09:00 KST (UTC 00:00)
+  workflow_dispatch: {} # 수동 실행 허용
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 임박 알림 엔드포인트 호출
+        run: |
+          curl -fsS -X POST "${API_BASE}/internal/notify-expiring" \
+            -H "X-Internal-Token: ${INTERNAL_TOKEN}"
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          INTERNAL_TOKEN: ${{ secrets.INTERNAL_TOKEN }}
