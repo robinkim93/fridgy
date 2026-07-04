@@ -41,3 +41,33 @@ class InventoryConfirmRequest(BaseModel):
 class InventoryConfirmResponse(BaseModel):
     inserted: int
     itemIds: list[str]
+
+
+class InventoryItemResponse(BaseModel):
+    """재고 품목 (packages/shared InventoryItem 계약과 일치)."""
+
+    id: str
+    fridgeId: str
+    name: str
+    category: ItemCategory = "기타"
+    qty: float = 1
+    unit: str = "개"
+    purchasedAt: str
+    expireAt: str | None = None
+    source: Literal["receipt", "manual", "voice"] = "receipt"
+    status: Literal["active", "consumed", "discarded"] = "active"
+
+
+class InventoryListResponse(BaseModel):
+    items: list[InventoryItemResponse] = Field(default_factory=list)
+
+
+class ExpiryOverrideRequest(BaseModel):
+    itemName: str
+    customDays: int = Field(gt=0, le=3650)
+
+
+class ExpiryOverrideResponse(BaseModel):
+    itemName: str
+    customDays: int
+    updated: int  # 즉시 재계산된 활성 품목 수

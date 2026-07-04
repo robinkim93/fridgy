@@ -7,7 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from .. import db
 from ..auth import AuthUser, get_current_user
 from ..normalize import first_pass
-from ..schemas import InventoryConfirmRequest, InventoryConfirmResponse
+from ..schemas import (
+    ExpiryOverrideRequest,
+    ExpiryOverrideResponse,
+    InventoryConfirmRequest,
+    InventoryConfirmResponse,
+    InventoryItemResponse,
+    InventoryListResponse,
+)
 
 router = APIRouter(tags=["inventory"])
 
@@ -21,7 +28,7 @@ def confirm_inventory(
 
     fridge_id = db.get_or_create_personal_fridge(user.user_id)
     inserted = db.insert_inventory(
-        fridge_id, [it.model_dump() for it in body.items]
+        user.user_id, fridge_id, [it.model_dump() for it in body.items]
     )
 
     # 3차 학습(SD-3): 사용자가 최종 확정한 표기를 개인 사전에 남긴다.
@@ -36,4 +43,44 @@ def confirm_inventory(
 
     return InventoryConfirmResponse(
         inserted=len(inserted), itemIds=[r["id"] for r in inserted]
+    )
+
+
+@router.get("/inventory")
+def list_inventory(
+    user: AuthUser = Depends(get_current_user),
+) -> InventoryListResponse:
+    """활성 재고를 임박 순으로 조회(F2 임박 순 화면)."""
+    fridge_id = db.get_or_create_personal_fridge(user.user_id)
+    rows = db.list_inventory(fridge_id)
+    items = [
+        InventoryItemResponse(
+            id=r["id"],
+            fridgeId=r["fridge_id"],
+            name=r["name"],
+            category=r.get("category", "기타"),
+            qty=r.get("qty", 1),
+            unit=r.get("unit", "개"),
+            purchasedAt=r["purchased_at"],
+            expireAt=r.get("expire_at"),
+            source=r.get("source", "receipt"),
+            status=r.get("status", "active"),
+        )
+        for r in rows
+    ]
+    return InventoryListResponse(items=items)
+
+
+@router.put("/inventory/override")
+def set_expiry_override(
+    body: ExpiryOverrideRequest, user: AuthUser = Depends(get_current_user)
+) -> ExpiryOverrideResponse:
+    """특정 품목의 소비일수를 개인화 보정하고, 활성 재고에 즉시 반영한다(F2 DoD)."""
+    db.upsert_user_override(user.user_id, body.itemName, body.customDays)
+    fridge_id = db.get_or_create_personal_fridge(user.user_id)
+    updated = db.recompute_expiry_for_name(
+        fridge_id, body.itemName, body.customDays
+    )
+    return ExpiryOverrideResponse(
+        itemName=body.itemName, customDays=body.customDays, updated=updated
     )

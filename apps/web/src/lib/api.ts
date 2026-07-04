@@ -1,5 +1,6 @@
 import type {
   HealthResponse,
+  InventoryItem,
   ParsedItem,
   ReceiptJob,
   ReceiptJobStatus,
@@ -93,5 +94,31 @@ export async function confirmInventory(
     );
   }
 
+  return res.json();
+}
+
+/** 활성 재고 조회 (임박 순 정렬은 서버가 수행) */
+export async function getInventory(): Promise<InventoryItem[]> {
+  const res = await authenticatedFetch(`${API_BASE}/inventory`);
+  if (!res.ok) {
+    throw new Error(`재고 조회 실패 (${res.status}): ${await res.text()}`);
+  }
+  const data: { items: InventoryItem[] } = await res.json();
+  return data.items;
+}
+
+/** 품목 소비일수 개인화 보정 → 활성 재고 즉시 반영 */
+export async function setExpiryOverride(
+  itemName: string,
+  customDays: number
+): Promise<{ itemName: string; customDays: number; updated: number }> {
+  const res = await authenticatedFetch(`${API_BASE}/inventory/override`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ itemName, customDays }),
+  });
+  if (!res.ok) {
+    throw new Error(`소비기한 보정 실패 (${res.status}): ${await res.text()}`);
+  }
   return res.json();
 }
