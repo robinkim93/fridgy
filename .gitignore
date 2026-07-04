@@ -1,0 +1,24 @@
+# 개인 로컬 설정 (커밋 금지)
+.claude/settings.local.json
+
+# 환경 변수/시크릿
+.env
+.env.*
+!.env.example
+
+# 의존성
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 빌드 산출물
+dist/
+build/
+.next/
+.output/
+
+# OS/에디터
+.DS_Store
+*.log
