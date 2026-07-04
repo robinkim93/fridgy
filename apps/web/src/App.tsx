@@ -4,8 +4,9 @@ import { getHealth } from "./lib/api";
 import { useAuth } from "./features/auth/useAuth";
 import { LoginScreen } from "./features/auth/LoginScreen";
 import { ReceiptFlow } from "./features/receipt/ReceiptFlow";
+import { InventoryScreen } from "./features/inventory/InventoryScreen";
 
-type AppPage = "dashboard" | "receipt";
+type AppPage = "dashboard" | "receipt" | "inventory";
 
 // S1: 인증 + 영수증 재고 등록 UI
 export default function App() {
@@ -44,6 +45,12 @@ export default function App() {
     return <ReceiptFlow onDashboardReturn={() => setCurrentPage("dashboard")} />;
   }
 
+  if (currentPage === "inventory") {
+    return (
+      <InventoryScreen onDashboardReturn={() => setCurrentPage("dashboard")} />
+    );
+  }
+
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-6">
       <div className="text-center">
@@ -61,7 +68,7 @@ export default function App() {
         </button>
 
         <button
-          onClick={() => alert("S2: 대시보드 기능 준비 중")}
+          onClick={() => setCurrentPage("inventory")}
           className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 font-medium text-gray-700 hover:border-gray-400"
         >
           📊 나의 재고 확인

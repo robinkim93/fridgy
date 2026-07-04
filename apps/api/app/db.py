@@ -7,10 +7,12 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 
 from supabase import Client, create_client
 
+from . import expiry
 from .config import get_settings
 from .normalize import Normalized, alias_key
 
@@ -140,10 +142,95 @@ def _update_job(job_id: str, fields: dict) -> None:
     get_client().table("receipt_jobs").update(fields).eq("id", job_id).execute()
 
 
-# ── 재고 ──────────────────────────────────────────────────────────────────
-def insert_inventory(fridge_id: str, items: list[dict]) -> list[dict]:
-    """확정된 품목을 재고에 적재. expire_at은 S2(소비기한)에서 채운다."""
+# ── 소비기한 기준표·오버라이드 (S2) ───────────────────────────────────────
+def load_consumption_reference() -> tuple[dict[str, int], dict[str, int]]:
+    """기준표를 (item_days, category_days)로 로드.
+
+    item_days:     name 규칙 행 { 표준명: 일수 }
+    category_days: name NULL(카테고리 기본값) 행 { 카테고리: 일수 }
+    """
     c = get_client()
+    rows = (
+        c.table("consumption_reference")
+        .select("name, category, default_days")
+        .execute()
+    )
+    item_days: dict[str, int] = {}
+    category_days: dict[str, int] = {}
+    for r in rows.data or []:
+        if r.get("name"):
+            item_days[r["name"]] = r["default_days"]
+        else:
+            category_days[r["category"]] = r["default_days"]
+    return item_days, category_days
+
+
+def load_user_overrides(user_id: str) -> dict[str, int]:
+    """사용자 개인화 오버라이드 { 품목명: custom_days }."""
+    c = get_client()
+    rows = (
+        c.table("user_overrides")
+        .select("item_name, custom_days")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return {r["item_name"]: r["custom_days"] for r in (rows.data or [])}
+
+
+def upsert_user_override(user_id: str, item_name: str, custom_days: int) -> None:
+    """오버라이드 저장(품목당 1개). 존재 시 갱신."""
+    c = get_client()
+    existing = (
+        c.table("user_overrides")
+        .select("id")
+        .eq("user_id", user_id)
+        .eq("item_name", item_name)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        c.table("user_overrides").update(
+            {
+                "custom_days": custom_days,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ).eq("id", existing.data[0]["id"]).execute()
+    else:
+        c.table("user_overrides").insert(
+            {"user_id": user_id, "item_name": item_name, "custom_days": custom_days}
+        ).execute()
+
+
+def recompute_expiry_for_name(
+    fridge_id: str, item_name: str, custom_days: int
+) -> int:
+    """오버라이드 반영: 해당 냉장고의 활성 품목 중 이름이 같은 항목의
+    expire_at = purchased_at + custom_days 로 즉시 재계산한다. 갱신 건수 반환."""
+    c = get_client()
+    rows = (
+        c.table("inventory_items")
+        .select("id, purchased_at")
+        .eq("fridge_id", fridge_id)
+        .eq("name", item_name)
+        .eq("status", "active")
+        .execute()
+    )
+    for r in rows.data or []:
+        purchased = date.fromisoformat(r["purchased_at"])
+        new_expire = (purchased + timedelta(days=custom_days)).isoformat()
+        c.table("inventory_items").update({"expire_at": new_expire}).eq(
+            "id", r["id"]
+        ).execute()
+    return len(rows.data or [])
+
+
+# ── 재고 ──────────────────────────────────────────────────────────────────
+def insert_inventory(user_id: str, fridge_id: str, items: list[dict]) -> list[dict]:
+    """확정된 품목을 재고에 적재. 소비기한 기준표로 expire_at을 채운다(S2)."""
+    c = get_client()
+    item_days, category_days = load_consumption_reference()
+    overrides = load_user_overrides(user_id)
+    today = date.today()
     payload = [
         {
             "fridge_id": fridge_id,
@@ -152,10 +239,35 @@ def insert_inventory(fridge_id: str, items: list[dict]) -> list[dict]:
             "qty": it.get("qty", 1),
             "unit": it.get("unit", "개"),
             "source": "receipt",
+            "expire_at": expiry.compute_expire_at(
+                it["name"],
+                it.get("category", "기타"),
+                today,
+                item_days,
+                category_days,
+                overrides,
+            ).isoformat(),
         }
         for it in items
     ]
     res = c.table("inventory_items").insert(payload).execute()
+    return res.data or []
+
+
+def list_inventory(fridge_id: str) -> list[dict]:
+    """활성 재고를 임박 순(expire_at 오름차순)으로 반환. NULL 만료는 뒤로."""
+    c = get_client()
+    res = (
+        c.table("inventory_items")
+        .select(
+            "id, fridge_id, name, category, qty, unit, "
+            "purchased_at, expire_at, source, status"
+        )
+        .eq("fridge_id", fridge_id)
+        .eq("status", "active")
+        .order("expire_at", desc=False, nullsfirst=False)
+        .execute()
+    )
     return res.data or []
 
 
