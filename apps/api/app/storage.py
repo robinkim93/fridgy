@@ -25,3 +25,8 @@ def upload_receipt(user_id: str, data: bytes, content_type: str) -> str:
         path, data, {"content-type": content_type, "upsert": "false"}
     )
     return path
+
+
+def delete_receipt(path: str) -> None:
+    """영수증 원본 삭제(SD-2 파기 배치). 존재하지 않는 객체는 호출부가 무시한다."""
+    get_client().storage.from_(RECEIPTS_BUCKET).remove([path])

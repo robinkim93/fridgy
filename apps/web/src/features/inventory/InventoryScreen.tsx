@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InventoryItem } from "@fridgy/shared";
 import { consumeItems, getInventory, setExpiryOverride } from "../../lib/api";
+import { track } from "../../lib/track";
 import { useActiveFridge } from "../fridge/useActiveFridge";
 
 interface InventoryScreenProps {
@@ -60,7 +61,8 @@ export function InventoryScreen({ onDashboardReturn }: InventoryScreenProps) {
   const consume = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "consumed" | "discarded" }) =>
       consumeItems([id], action, activeFridgeId),
-    onSuccess: () => {
+    onSuccess: (_data, { action }) => {
+      if (action === "discarded") track("item_discarded", {});
       queryClient.invalidateQueries({ queryKey: ["inventory", activeFridgeId] });
       queryClient.invalidateQueries({ queryKey: ["recipes", activeFridgeId] });
     },

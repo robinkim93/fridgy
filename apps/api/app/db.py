@@ -824,6 +824,112 @@ def list_shared_recipe_slugs(limit: int = 1000) -> list[dict]:
     return rows.data or []
 
 
+# ── SD-1 이벤트 트래킹 ─────────────────────────────────────────────────────
+def insert_events(session_id: str, user_id: str | None, events: list[dict]) -> int:
+    """이벤트 배치 적재. 개인식별 없이 session_id + type + props만. 적재 건수 반환."""
+    if not events:
+        return 0
+    rows = [
+        {
+            "session_id": session_id,
+            "user_id": user_id,
+            "type": e["type"],
+            "props": e.get("props") or {},
+        }
+        for e in events
+    ]
+    res = get_client().table("analytics_events").insert(rows).execute()
+    return len(res.data or [])
+
+
+# ── SD-2 동의·거버넌스 ─────────────────────────────────────────────────────
+_CONSENT_DEFAULT = {"data_consent": False, "receipt_retain": False, "onboarded": False}
+
+
+def get_consent(user_id: str) -> dict:
+    """동의 설정 조회. 없으면 기본(프라이버시 우선)으로 간주(행은 생성하지 않음)."""
+    c = get_client()
+    rows = (
+        c.table("user_consent")
+        .select("data_consent, receipt_retain, onboarded")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    return rows.data[0] if rows.data else dict(_CONSENT_DEFAULT)
+
+
+def set_consent(
+    user_id: str,
+    *,
+    data_consent: bool | None = None,
+    receipt_retain: bool | None = None,
+    onboarded: bool | None = None,
+) -> dict:
+    """동의 설정 upsert(부분 갱신). 갱신된 최종 상태를 반환."""
+    current = get_consent(user_id)
+    merged = {
+        "data_consent": current["data_consent"] if data_consent is None else data_consent,
+        "receipt_retain": current["receipt_retain"]
+        if receipt_retain is None
+        else receipt_retain,
+        "onboarded": current["onboarded"] if onboarded is None else onboarded,
+    }
+    get_client().table("user_consent").upsert(
+        {
+            "user_id": user_id,
+            **merged,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        on_conflict="user_id",
+    ).execute()
+    return merged
+
+
+def purge_receipt_originals() -> int:
+    """보관 미동의(receipt_retain=false) 영수증 원본을 파기(SD-2 cron).
+
+    파기 대상: image_path가 있고 아직 purged_at이 없는 작업 중, 소유자의
+    receipt_retain이 false인 것(동의 행이 없으면 기본 false=파기). 삭제 후 purged_at 기록.
+    반환: 파기한 원본 수.
+    """
+    from . import storage
+
+    c = get_client()
+    jobs = (
+        c.table("receipt_jobs")
+        .select("id, user_id, image_path")
+        .not_.is_("image_path", "null")
+        .is_("purged_at", "null")
+        .execute()
+    )
+    rows = jobs.data or []
+    if not rows:
+        return 0
+
+    # 보관 동의한 사용자 집합(true인 사람만 남긴다).
+    retained = (
+        c.table("user_consent")
+        .select("user_id")
+        .eq("receipt_retain", True)
+        .execute()
+    )
+    retain_users = {r["user_id"] for r in (retained.data or [])}
+
+    purged = 0
+    now = datetime.now(timezone.utc).isoformat()
+    for job in rows:
+        if job["user_id"] in retain_users:
+            continue  # 보관 동의 → 유지
+        try:
+            storage.delete_receipt(job["image_path"])
+        except Exception:  # noqa: BLE001 - 이미 없는 객체 등은 무시하고 파기로 마킹
+            pass
+        c.table("receipt_jobs").update({"purged_at": now}).eq("id", job["id"]).execute()
+        purged += 1
+    return purged
+
+
 def normalized_to_parsed(n: Normalized) -> dict:
     """정규화 결과 → API/보정 UI용 ParsedItem(camelCase, packages/shared 계약)."""
     return {

@@ -1,4 +1,6 @@
 import type {
+  AnalyticsEvent,
+  ConsentState,
   FridgeActivity,
   FridgeMember,
   FridgeRole,
@@ -366,6 +368,58 @@ export async function getActivity(fridgeId: string): Promise<FridgeActivity[]> {
   }
   const data: { items: FridgeActivity[] } = await res.json();
   return data.items;
+}
+
+// ── SD-1 이벤트 트래킹 ──────────────────────────────────────────────────────
+
+/** 이벤트 배치 전송. 로그인 시 Bearer 첨부(서버가 동의 재확인), 미로그인은 익명. */
+export async function sendEvents(
+  sessionId: string,
+  events: AnalyticsEvent[]
+): Promise<void> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (session) headers.Authorization = `Bearer ${session.access_token}`;
+
+  const body = JSON.stringify({ sessionId, events });
+  // 페이지 이탈 중에도 유실을 줄이려 sendBeacon 우선(가능할 때).
+  if (!session && typeof navigator.sendBeacon === "function") {
+    const ok = navigator.sendBeacon(
+      `${API_BASE}/events`,
+      new Blob([body], { type: "application/json" })
+    );
+    if (ok) return;
+  }
+  await fetch(`${API_BASE}/events`, {
+    method: "POST",
+    headers,
+    body,
+    keepalive: true,
+  });
+}
+
+// ── SD-2 동의·거버넌스 ──────────────────────────────────────────────────────
+
+/** 현재 동의 상태 조회 */
+export async function getConsent(): Promise<ConsentState> {
+  const res = await authenticatedFetch(`${API_BASE}/me/consent`);
+  if (!res.ok) throw new Error(`동의 조회 실패 (${res.status}): ${await res.text()}`);
+  return res.json();
+}
+
+/** 동의 상태 부분 갱신(온보딩 수락/거절, 토글) */
+export async function updateConsent(
+  patch: Partial<ConsentState>
+): Promise<ConsentState> {
+  const res = await authenticatedFetch(`${API_BASE}/me/consent`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`동의 변경 실패 (${res.status}): ${await res.text()}`);
+  return res.json();
 }
 
 // ── S6 절약/낭비 리포트 (F7) ───────────────────────────────────────────────
