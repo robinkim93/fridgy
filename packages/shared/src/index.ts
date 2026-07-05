@@ -74,6 +74,12 @@ export interface RecipeSuggestion {
   cached: boolean; // 캐시 재사용 여부
 }
 
+/** POST /recipes/share 응답 (F9) — 공개 공유 URL */
+export interface SharedRecipe {
+  slug: string;
+  url: string; // API 도메인의 /r/{slug}
+}
+
 /** 공유 냉장고 멤버십 역할 (F6) */
 export type FridgeRole = "owner" | "member";
 

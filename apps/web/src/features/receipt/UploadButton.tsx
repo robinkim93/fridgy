@@ -8,6 +8,11 @@ interface UploadButtonProps {
   fridgeId?: string;
 }
 
+/** 이미지 + PDF(F8 온라인 장보기 영수증) 허용 */
+function isAccepted(file: File): boolean {
+  return file.type.startsWith("image/") || file.type === "application/pdf";
+}
+
 export function UploadButton({
   onJobCreated,
   onError,
@@ -17,11 +22,12 @@ export function UploadButton({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
-  /** 파일 선택/카메라 촬영 → 즉시 업로드 */
+  /** 파일 선택/카메라 촬영/드롭 → 즉시 업로드 */
   const handleFileSelect = async (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      onError("이미지 파일만 업로드할 수 있습니다.");
+    if (!isAccepted(file)) {
+      onError("이미지 또는 PDF 파일만 업로드할 수 있습니다.");
       return;
     }
 
@@ -53,24 +59,46 @@ export function UploadButton({
       }
     };
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const busy = uploading || isLoading;
+
   return (
     <div className="flex flex-col gap-3">
-      {/* 카메라 촬영 */}
+      {/* 드래그 & 드롭 영역 (데스크톱 파일/PDF) */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => !busy && fileInputRef.current?.click()}
+        className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-8 text-center transition ${
+          dragOver
+            ? "border-blue-500 bg-blue-50"
+            : "border-gray-300 hover:border-gray-400"
+        } ${busy ? "pointer-events-none opacity-50" : ""}`}
+      >
+        <span className="text-2xl">📎</span>
+        <p className="text-sm font-medium text-gray-700">
+          {uploading ? "업로드 중…" : "여기로 영수증을 끌어다 놓기"}
+        </p>
+        <p className="text-xs text-gray-400">이미지 또는 PDF · 클릭해서 선택</p>
+      </div>
+
+      {/* 카메라 촬영 (모바일) */}
       <button
         onClick={() => cameraInputRef.current?.click()}
-        disabled={uploading || isLoading}
+        disabled={busy}
         className="w-full rounded-lg bg-blue-600 px-4 py-3 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
       >
         {uploading ? "업로드 중…" : "📷 카메라로 촬영"}
-      </button>
-
-      {/* 파일 업로드 */}
-      <button
-        onClick={() => fileInputRef.current?.click()}
-        disabled={uploading || isLoading}
-        className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 font-medium text-gray-700 hover:border-gray-400 disabled:opacity-50"
-      >
-        {uploading ? "업로드 중…" : "📁 파일 선택"}
       </button>
 
       {/* 숨겨진 입력 필드 */}
@@ -85,7 +113,7 @@ export function UploadButton({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,application/pdf"
         onChange={handleInputChange(fileInputRef)}
         className="hidden"
       />

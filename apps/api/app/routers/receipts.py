@@ -20,8 +20,8 @@ from ..schemas import ParsedItem, ReceiptCreateResponse, ReceiptJobResponse
 
 router = APIRouter(prefix="/receipts", tags=["receipts"])
 
-_ALLOWED = {"image/png", "image/jpeg", "image/webp"}
-_MAX_BYTES = 8 * 1024 * 1024  # 8MB
+_ALLOWED = {"image/png", "image/jpeg", "image/webp", "application/pdf"}
+_MAX_BYTES = 12 * 1024 * 1024  # 12MB (PDF 영수증 포함)
 
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
@@ -37,7 +37,7 @@ def create_receipt(
     if not data:
         raise HTTPException(400, "빈 파일")
     if len(data) > _MAX_BYTES:
-        raise HTTPException(413, "파일이 너무 큽니다(최대 8MB)")
+        raise HTTPException(413, "파일이 너무 큽니다(최대 12MB)")
 
     try:
         fridge_id, _ = db.resolve_fridge(user.user_id, fridgeId)
