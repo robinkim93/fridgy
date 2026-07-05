@@ -768,6 +768,62 @@ def consume_inventory_items(
     return len(targets)
 
 
+# ── 레시피 공유 URL (S7, F9) ──────────────────────────────────────────────
+def create_shared_recipe(
+    user_id: str, fridge_id: str | None, title: str, recipe: dict
+) -> str:
+    """생성 레시피를 공개 공유용으로 스냅샷 저장. slug 반환(DB default로 생성)."""
+    c = get_client()
+    res = (
+        c.table("shared_recipes")
+        .insert(
+            {
+                "created_by": user_id,
+                "fridge_id": fridge_id,
+                "title": title,
+                "recipe": recipe,
+            }
+        )
+        .execute()
+    )
+    return res.data[0]["slug"]
+
+
+def get_shared_recipe(slug: str) -> dict | None:
+    """공개 조회(무인증). slug로 단건. 조회수는 best-effort로 증가."""
+    c = get_client()
+    rows = (
+        c.table("shared_recipes")
+        .select("slug, title, recipe, view_count, created_at")
+        .eq("slug", slug)
+        .limit(1)
+        .execute()
+    )
+    if not rows.data:
+        return None
+    row = rows.data[0]
+    try:  # 조회수 집계 실패는 렌더를 막지 않는다
+        c.table("shared_recipes").update(
+            {"view_count": row.get("view_count", 0) + 1}
+        ).eq("slug", slug).execute()
+    except Exception:  # noqa: BLE001
+        pass
+    return row
+
+
+def list_shared_recipe_slugs(limit: int = 1000) -> list[dict]:
+    """사이트맵용 최근 공유 레시피(slug, created_at). 공개 무인증."""
+    c = get_client()
+    rows = (
+        c.table("shared_recipes")
+        .select("slug, created_at")
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return rows.data or []
+
+
 def normalized_to_parsed(n: Normalized) -> dict:
     """정규화 결과 → API/보정 UI용 ParsedItem(camelCase, packages/shared 계약)."""
     return {

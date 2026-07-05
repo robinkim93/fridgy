@@ -5,6 +5,7 @@ import {
   consumeItems,
   getInventory,
   getRecipeSuggestions,
+  shareRecipe,
 } from "../../lib/api";
 import { useActiveFridge } from "../fridge/useActiveFridge";
 
@@ -12,7 +13,17 @@ interface RecipeScreenProps {
   onDashboardReturn: () => void;
 }
 
-function RecipeCard({ recipe, onCook }: { recipe: Recipe; onCook: () => void }) {
+function RecipeCard({
+  recipe,
+  onCook,
+  onShare,
+  sharing,
+}: {
+  recipe: Recipe;
+  onCook: () => void;
+  onShare: () => void;
+  sharing: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   // 임박 재료는 주황으로만 강조(사용 재료와 중복 칩 방지). used에 없는 임박도 뒤에 붙인다.
@@ -79,12 +90,21 @@ function RecipeCard({ recipe, onCook }: { recipe: Recipe; onCook: () => void }) 
               ))}
             </ol>
           </div>
-          <button
-            onClick={onCook}
-            className="w-full rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
-          >
-            이 요리 만들었어요
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onCook}
+              className="flex-1 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+            >
+              이 요리 만들었어요
+            </button>
+            <button
+              onClick={onShare}
+              disabled={sharing}
+              className="shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:border-gray-400 disabled:opacity-50"
+            >
+              {sharing ? "공유 중…" : "🔗 공유"}
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -128,6 +148,28 @@ export function RecipeScreen({ onDashboardReturn }: RecipeScreenProps) {
       queryClient.invalidateQueries({ queryKey: ["recipes", activeFridgeId] });
       setSuccessMessage(`소비 처리됨 ${result.updated}건`);
       setTimeout(() => setSuccessMessage(""), 3000);
+    },
+  });
+
+  // 공유: 공개 페이지 생성 → Web Share API(모바일) 또는 링크 복사(데스크톱)
+  const shareMutation = useMutation({
+    mutationFn: (recipe: Recipe) => shareRecipe(recipe, activeFridgeId),
+    onSuccess: async ({ url }, recipe) => {
+      setSuccessMessage("");
+      try {
+        if (navigator.share) {
+          await navigator.share({ title: recipe.title, url });
+          return;
+        }
+        await navigator.clipboard.writeText(url);
+        setSuccessMessage("공유 링크를 복사했어요");
+        setTimeout(() => setSuccessMessage(""), 3000);
+      } catch {
+        // 사용자가 공유 시트를 닫은 경우 등 — 조용히 무시
+      }
+    },
+    onError: (err) => {
+      window.alert((err as Error).message);
     },
   });
 
@@ -213,6 +255,11 @@ export function RecipeScreen({ onDashboardReturn }: RecipeScreenProps) {
               <RecipeCard
                 recipe={recipe}
                 onCook={() => handleCookRecipe(recipe)}
+                onShare={() => shareMutation.mutate(recipe)}
+                sharing={
+                  shareMutation.isPending &&
+                  shareMutation.variables?.title === recipe.title
+                }
               />
             </li>
           ))}

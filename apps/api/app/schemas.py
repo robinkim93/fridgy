@@ -142,6 +142,23 @@ class ConsumeResponse(BaseModel):
     updated: int  # 상태 전이된 활성 품목 수
 
 
+# ── S7 레시피 공유 URL (F9) ─────────────────────────────────────────────────
+class ShareRecipeRequest(BaseModel):
+    """공유할 레시피 스냅샷(RecipeResponse 계약과 동일)."""
+
+    fridgeId: str | None = None
+    title: str = Field(min_length=1, max_length=200)
+    usedIngredients: list[str] = Field(default_factory=list)
+    expiringUsed: list[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+    steps: list[str] = Field(default_factory=list)
+
+
+class ShareRecipeResponse(BaseModel):
+    slug: str
+    url: str  # 공개 공유 URL (API 도메인의 /r/{slug})
+
+
 # ── S5 공유 냉장고 (F6) ─────────────────────────────────────────────────────
 FridgeRole = Literal["owner", "member"]
 

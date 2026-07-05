@@ -12,7 +12,9 @@ import type {
   ParsedItem,
   ReceiptJob,
   ReceiptJobStatus,
+  Recipe,
   RecipeSuggestion,
+  SharedRecipe,
   WasteReport,
 } from "@fridgy/shared";
 import { supabase } from "./supabase";
@@ -234,6 +236,29 @@ export async function markNotificationRead(id: string): Promise<void> {
   if (!res.ok) {
     throw new Error(`알림 읽음 표시 실패 (${res.status}): ${await res.text()}`);
   }
+}
+
+/** 레시피를 공개 페이지로 공유 (F9) → {slug, url} */
+export async function shareRecipe(
+  recipe: Recipe,
+  fridgeId?: string
+): Promise<SharedRecipe> {
+  const res = await authenticatedFetch(`${API_BASE}/recipes/share`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fridgeId,
+      title: recipe.title,
+      usedIngredients: recipe.usedIngredients,
+      expiringUsed: recipe.expiringUsed,
+      missing: recipe.missing,
+      steps: recipe.steps,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`레시피 공유 실패 (${res.status}): ${await res.text()}`);
+  }
+  return res.json();
 }
 
 // ── 공유 냉장고 (S5, F6) ────────────────────────────────────────────────────

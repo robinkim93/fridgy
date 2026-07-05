@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     # CORS: 프런트(Cloudflare Pages) 도메인. 콤마 구분.
     cors_origins: str = "http://localhost:5173"
 
+    # 공유 URL(F9): API 자체 공개 URL(공유 링크·og:url·sitemap 생성 기준)과
+    # 프런트(웹앱) 공개 URL(공유 페이지의 앱 열기 CTA). 배포 환경에서 override.
+    public_base_url: str = "http://localhost:8000"
+    web_base_url: str = "http://localhost:5173"
+    # OG 미리보기 이미지(정적 브랜드 이미지). 웹앱 public 자산으로 서빙.
+    og_image_url: str = "http://localhost:5173/og-recipe.png"
+
     # Supabase (Auth JWT 검증·DB·Storage)
     supabase_url: str = ""
     supabase_anon_key: str = ""

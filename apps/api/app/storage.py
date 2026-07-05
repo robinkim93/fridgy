@@ -14,9 +14,12 @@ RECEIPTS_BUCKET = "receipts"
 
 def upload_receipt(user_id: str, data: bytes, content_type: str) -> str:
     """영수증 이미지를 업로드하고 저장 경로를 반환."""
-    ext = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}.get(
-        content_type, "bin"
-    )
+    ext = {
+        "image/png": "png",
+        "image/jpeg": "jpg",
+        "image/webp": "webp",
+        "application/pdf": "pdf",
+    }.get(content_type, "bin")
     path = f"{user_id}/{uuid.uuid4().hex}.{ext}"
     get_client().storage.from_(RECEIPTS_BUCKET).upload(
         path, data, {"content-type": content_type, "upsert": "false"}
