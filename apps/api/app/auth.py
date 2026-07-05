@@ -55,3 +55,17 @@ def get_current_user(
             detail="Token missing subject",
         )
     return AuthUser(user_id=user_id, email=payload.get("email"))
+
+
+def get_optional_user(
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+) -> AuthUser | None:
+    """인증이 있으면 사용자, 없으면 None(익명). SD-1 이벤트 수집처럼
+    로그인 여부와 무관하게 받되, 로그인 시 집계·동의 검증에 쓴다."""
+    if not authorization:
+        return None
+    try:
+        return get_current_user(authorization, settings)
+    except HTTPException:
+        return None

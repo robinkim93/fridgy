@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Recipe } from "@fridgy/shared";
+import { track } from "../../lib/track";
 import {
   consumeItems,
   getInventory,
@@ -128,6 +129,16 @@ export function RecipeScreen({ onDashboardReturn }: RecipeScreenProps) {
     retry: false,
   });
 
+  // 추천 결과가 도착하면 1회 기록(캐시 여부·건수 신호).
+  useEffect(() => {
+    if (suggestions) {
+      track("recipe_suggested", {
+        count: suggestions.items.length,
+        cached: suggestions.cached,
+      });
+    }
+  }, [suggestions]);
+
   // 현재 재고 조회 (요리 후 재료 매칭용)
   const {
     data: inventory,
@@ -143,6 +154,7 @@ export function RecipeScreen({ onDashboardReturn }: RecipeScreenProps) {
     mutationFn: (itemIds: string[]) =>
       consumeItems(itemIds, "consumed", activeFridgeId),
     onSuccess: (result) => {
+      track("recipe_cooked", { items: result.updated });
       // 무효화하여 재고와 레시피 모두 갱신
       queryClient.invalidateQueries({ queryKey: ["inventory", activeFridgeId] });
       queryClient.invalidateQueries({ queryKey: ["recipes", activeFridgeId] });
@@ -155,6 +167,7 @@ export function RecipeScreen({ onDashboardReturn }: RecipeScreenProps) {
   const shareMutation = useMutation({
     mutationFn: (recipe: Recipe) => shareRecipe(recipe, activeFridgeId),
     onSuccess: async ({ url }, recipe) => {
+      track("recipe_shared", {});
       setSuccessMessage("");
       try {
         if (navigator.share) {

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { createReceipt } from "../../lib/api";
+import { track } from "../../lib/track";
 
 interface UploadButtonProps {
   onJobCreated: (jobId: string) => void;
@@ -34,6 +35,9 @@ export function UploadButton({
     setUploading(true);
     try {
       const { jobId } = await createReceipt(file, fridgeId);
+      track("receipt_uploaded", {
+        kind: file.type === "application/pdf" ? "pdf" : "image",
+      });
       onJobCreated(jobId);
     } catch (err) {
       onError(

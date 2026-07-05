@@ -74,6 +74,28 @@ export interface RecipeSuggestion {
   cached: boolean; // 캐시 재사용 여부
 }
 
+/** SD-1 표준 이벤트 타입 (트래커 ↔ POST /events 계약) */
+export type EventType =
+  | "receipt_uploaded"
+  | "item_corrected"
+  | "recipe_suggested"
+  | "recipe_cooked"
+  | "item_discarded"
+  | "recipe_shared";
+
+/** 단일 이벤트 (익명: session_id + type + props만) */
+export interface AnalyticsEvent {
+  type: EventType;
+  props?: Record<string, unknown>;
+}
+
+/** SD-2 동의·거버넌스 상태 (GET/PATCH /me/consent) */
+export interface ConsentState {
+  dataConsent: boolean; // 익명 데이터 개선 사용 동의
+  receiptRetain: boolean; // 영수증 원본 보관(false면 파기)
+  onboarded: boolean; // 동의 온보딩 완료 여부
+}
+
 /** POST /recipes/share 응답 (F9) — 공개 공유 URL */
 export interface SharedRecipe {
   slug: string;

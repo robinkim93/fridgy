@@ -159,6 +159,48 @@ class ShareRecipeResponse(BaseModel):
     url: str  # 공개 공유 URL (API 도메인의 /r/{slug})
 
 
+# ── SD-1 이벤트 트래킹 ─────────────────────────────────────────────────────
+EventType = Literal[
+    "receipt_uploaded",
+    "item_corrected",
+    "recipe_suggested",
+    "recipe_cooked",
+    "item_discarded",
+    "recipe_shared",
+]
+
+
+class EventInput(BaseModel):
+    type: EventType
+    props: dict = Field(default_factory=dict)
+
+
+class EventBatchRequest(BaseModel):
+    sessionId: str = Field(min_length=1, max_length=64)
+    events: list[EventInput] = Field(default_factory=list, max_length=50)
+
+
+class EventBatchResponse(BaseModel):
+    accepted: int  # 적재된 이벤트 수(옵트아웃 시 0)
+
+
+# ── SD-2 동의·거버넌스 ─────────────────────────────────────────────────────
+class ConsentResponse(BaseModel):
+    dataConsent: bool = False
+    receiptRetain: bool = False
+    onboarded: bool = False
+
+
+class ConsentUpdateRequest(BaseModel):
+    dataConsent: bool | None = None
+    receiptRetain: bool | None = None
+    onboarded: bool | None = None
+
+
+class PurgeReceiptsResponse(BaseModel):
+    purged: int
+
+
 # ── S5 공유 냉장고 (F6) ─────────────────────────────────────────────────────
 FridgeRole = Literal["owner", "member"]
 

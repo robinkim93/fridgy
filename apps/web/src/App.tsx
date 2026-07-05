@@ -13,6 +13,9 @@ import { ActiveFridgeProvider } from "./features/fridge/useActiveFridge";
 import { FridgeSwitcher } from "./features/fridge/FridgeSwitcher";
 import { FridgeManageScreen } from "./features/fridge/FridgeManageScreen";
 import { InviteAcceptScreen } from "./features/fridge/InviteAcceptScreen";
+import { useConsent } from "./features/consent/useConsent";
+import { ConsentOnboarding } from "./features/consent/ConsentOnboarding";
+import { SettingsScreen } from "./features/consent/SettingsScreen";
 
 type AppPage =
   | "dashboard"
@@ -21,7 +24,8 @@ type AppPage =
   | "recipe"
   | "report"
   | "notifications"
-  | "fridgeManage";
+  | "fridgeManage"
+  | "settings";
 
 // S1: 인증 + 영수증 재고 등록 UI
 function AppInner() {
@@ -35,6 +39,9 @@ function AppInner() {
     queryFn: getHealth,
     retry: false,
   });
+
+  // 동의 상태 조회(로그인 후) — dataConsent를 트래커에 반영하고 온보딩 노출을 결정.
+  const { data: consent } = useConsent(!!session);
 
   // 초대 파라미터 확인
   useEffect(() => {
@@ -80,6 +87,11 @@ function AppInner() {
     return <LoginScreen />;
   }
 
+  // 첫 로그인 후 동의 온보딩(미완료 시). 완료되면 자동으로 통과(캐시 onboarded=true).
+  if (consent && !consent.onboarded) {
+    return <ConsentOnboarding onDone={() => setCurrentPage("dashboard")} />;
+  }
+
   // 로그인됨 → 대시보드 또는 페이지 전환
   if (currentPage === "receipt") {
     return <ReceiptFlow onDashboardReturn={() => setCurrentPage("dashboard")} />;
@@ -114,6 +126,12 @@ function AppInner() {
   if (currentPage === "fridgeManage") {
     return (
       <FridgeManageScreen onDashboardReturn={() => setCurrentPage("dashboard")} />
+    );
+  }
+
+  if (currentPage === "settings") {
+    return (
+      <SettingsScreen onDashboardReturn={() => setCurrentPage("dashboard")} />
     );
   }
 
@@ -165,6 +183,13 @@ function AppInner() {
           className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 font-medium text-gray-700 hover:border-gray-400"
         >
           🔔 알림
+        </button>
+
+        <button
+          onClick={() => setCurrentPage("settings")}
+          className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 font-medium text-gray-700 hover:border-gray-400"
+        >
+          ⚙️ 설정
         </button>
       </div>
 

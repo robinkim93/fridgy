@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from .. import db, notify, push
 from ..config import Settings, get_settings
 from ..notify import ExpiringItem
-from ..schemas import NotifyExpiringResponse
+from ..schemas import NotifyExpiringResponse, PurgeReceiptsResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["internal"])
@@ -79,3 +79,17 @@ def notify_expiring(
     return NotifyExpiringResponse(
         usersNotified=users_notified, pushSent=push_sent, itemsFlagged=items_flagged
     )
+
+
+@router.post(
+    "/internal/purge-receipts", dependencies=[Depends(_require_internal_token)]
+)
+def purge_receipts() -> PurgeReceiptsResponse:
+    """영수증 원본 파기 배치 (SD-2).
+
+    보관 미동의(receipt_retain=false) 사용자의 영수증 원본을 Storage에서 삭제하고
+    purged_at을 기록한다. GitHub Actions cron이 일 1회 호출.
+    """
+    purged = db.purge_receipt_originals()
+    logger.info("purge-receipts: purged=%s", purged)
+    return PurgeReceiptsResponse(purged=purged)

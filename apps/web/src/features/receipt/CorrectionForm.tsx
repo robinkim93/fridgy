@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ItemCategory, ParsedItem } from "@fridgy/shared";
 import { confirmInventory } from "../../lib/api";
+import { track } from "../../lib/track";
 
 interface CorrectionFormProps {
   initialItems: ParsedItem[];
@@ -74,6 +75,15 @@ export function CorrectionForm({
     setConfirming(true);
     try {
       const { itemIds } = await confirmInventory(items, jobId, fridgeId);
+      // SD-1: 정규화 개선 신호(원문→보정). rawText로 초기 정규화명과 비교.
+      const initialByRaw = new Map(
+        initialItems.filter((it) => it.rawText).map((it) => [it.rawText, it.name])
+      );
+      const edited = items.filter(
+        (it) => it.rawText && initialByRaw.has(it.rawText) && initialByRaw.get(it.rawText) !== it.name
+      ).length;
+      const added = items.filter((it) => !it.rawText).length;
+      track("item_corrected", { edited, added, total: items.length });
       onSuccess(itemIds);
     } catch (err) {
       onError(
