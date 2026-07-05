@@ -133,3 +133,26 @@ export interface Notification {
   readAt: string | null; // ISO 8601, null이면 미읽음
   createdAt: string; // ISO 8601
 }
+
+/** 절약/낭비 리포트 (F7) */
+export interface WasteMonth {
+  month: string; // "YYYY-MM"
+  consumedCount: number;
+  discardedCount: number;
+  consumedAmount: number;
+  discardedAmount: number;
+}
+export interface TopDiscarded {
+  name: string;
+  count: number;
+}
+export interface WasteReport {
+  months: WasteMonth[];
+  topDiscarded: TopDiscarded[];
+  totals: {
+    discardedCount: number;
+    consumedCount: number;
+    savedAmount: number;
+    wastedAmount: number;
+  };
+}

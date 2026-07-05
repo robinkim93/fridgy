@@ -13,6 +13,7 @@ import type {
   ReceiptJob,
   ReceiptJobStatus,
   RecipeSuggestion,
+  WasteReport,
 } from "@fridgy/shared";
 import { supabase } from "./supabase";
 
@@ -340,4 +341,20 @@ export async function getActivity(fridgeId: string): Promise<FridgeActivity[]> {
   }
   const data: { items: FridgeActivity[] } = await res.json();
   return data.items;
+}
+
+// ── S6 절약/낭비 리포트 (F7) ───────────────────────────────────────────────
+
+/** 절약/낭비 리포트 조회 (월별 소비/폐기 통계) */
+export async function getWasteReport(
+  fridgeId?: string,
+  months = 6
+): Promise<WasteReport> {
+  const q = fridgeId
+    ? `?fridgeId=${encodeURIComponent(fridgeId)}&months=${months}`
+    : `?months=${months}`;
+  const res = await authenticatedFetch(`${API_BASE}/reports/waste${q}`);
+  if (!res.ok)
+    throw new Error(`리포트 조회 실패 (${res.status}): ${await res.text()}`);
+  return res.json();
 }

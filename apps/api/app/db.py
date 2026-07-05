@@ -462,6 +462,118 @@ def list_inventory(fridge_id: str) -> list[dict]:
     return res.data or []
 
 
+def get_waste_report(fridge_id: str, months: int = 6) -> dict:
+    """절약/낭비 리포트 (S6, F7).
+
+    waste_logs를 집계해 월별 소비/폐기 통계와 상위 폐기 품목을 반환한다.
+    - months: 조회 기간 (개월). 지난 months-1개월 첫 날부터 오늘까지.
+    - 반환: {months: [...], top_discarded: [...], totals: {...}}
+      각 month 버킷은 consumed_count, discarded_count, consumed_amount, discarded_amount.
+      est_price는 현재 항상 NULL이므로 amount는 0이 예상되고, count가 신호.
+    """
+    c = get_client()
+
+    # 시작일: (months-1)개월 전 첫 날 (UTC)
+    today_utc = datetime.now(timezone.utc)
+    today_date = today_utc.date()
+    # months-1개월 전 첫 날 계산
+    first_of_this_month = today_date.replace(day=1)
+    target_month = first_of_this_month.replace(day=1)
+    for _ in range(months - 1):
+        if target_month.month == 1:
+            target_month = target_month.replace(year=target_month.year - 1, month=12)
+        else:
+            target_month = target_month.replace(month=target_month.month - 1)
+
+    cutoff_iso = target_month.isoformat()
+
+    # waste_logs 조회: logged_at >= cutoff_iso
+    rows = (
+        c.table("waste_logs")
+        .select("name, category, action, est_price, logged_at")
+        .eq("fridge_id", fridge_id)
+        .gte("logged_at", cutoff_iso)
+        .execute()
+    )
+    logs = rows.data or []
+
+    # 월별 버킷 초기화 (지난 months-1개월 첫날부터 오늘까지의 모든 달)
+    month_buckets: dict[str, dict] = {}
+    current_month = target_month
+    for _ in range(months):
+        month_key = current_month.strftime("%Y-%m")
+        month_buckets[month_key] = {
+            "month": month_key,
+            "consumed_count": 0,
+            "discarded_count": 0,
+            "consumed_amount": 0.0,
+            "discarded_amount": 0.0,
+        }
+        # 다음 달로
+        if current_month.month == 12:
+            current_month = current_month.replace(year=current_month.year + 1, month=1)
+        else:
+            current_month = current_month.replace(month=current_month.month + 1)
+
+    # 로그 집계
+    top_discarded_map: dict[str, int] = {}
+    total_consumed_count = 0
+    total_discarded_count = 0
+    total_consumed_amount = 0.0
+    total_discarded_amount = 0.0
+
+    for log in logs:
+        # 월 키 추출
+        logged_at_str = log.get("logged_at", "")
+        if logged_at_str:
+            logged_date = datetime.fromisoformat(logged_at_str)
+            if logged_date.tzinfo is None:
+                logged_date = logged_date.replace(tzinfo=timezone.utc)
+            month_key = logged_date.date().strftime("%Y-%m")
+        else:
+            continue
+
+        action = log.get("action", "")
+        est_price = log.get("est_price")
+        amount = float(est_price) if est_price is not None else 0.0
+
+        if action == "consumed":
+            if month_key in month_buckets:
+                month_buckets[month_key]["consumed_count"] += 1
+                month_buckets[month_key]["consumed_amount"] += amount
+            total_consumed_count += 1
+            total_consumed_amount += amount
+        elif action == "discarded":
+            if month_key in month_buckets:
+                month_buckets[month_key]["discarded_count"] += 1
+                month_buckets[month_key]["discarded_amount"] += amount
+            total_discarded_count += 1
+            total_discarded_amount += amount
+            # 폐기 품목 집계
+            name = log.get("name", "")
+            if name:
+                top_discarded_map[name] = top_discarded_map.get(name, 0) + 1
+
+    # top_discarded: 상위 5개
+    top_discarded = sorted(
+        [{"name": k, "count": v} for k, v in top_discarded_map.items()],
+        key=lambda x: x["count"],
+        reverse=True,
+    )[:5]
+
+    # 반환 구조
+    return {
+        "months": sorted(month_buckets.values(), key=lambda x: x["month"]),
+        "top_discarded": top_discarded,
+        "totals": {
+            "discarded_count": total_discarded_count,
+            "consumed_count": total_consumed_count,
+            "saved_amount": total_consumed_amount,
+            "wasted_amount": total_discarded_amount,
+        },
+    }
+
+
 # ── 푸시 구독·알림 (S3) ────────────────────────────────────────────────────
 def upsert_push_subscription(
     user_id: str, endpoint: str, p256dh: str, auth: str

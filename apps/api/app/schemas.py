@@ -205,3 +205,30 @@ class ActivityResponse(BaseModel):
 
 class ActivityListResponse(BaseModel):
     items: list[ActivityResponse] = Field(default_factory=list)
+
+
+# ── S6 절약/낭비 리포트 (F7) ────────────────────────────────────────────────
+class WasteMonthResponse(BaseModel):
+    month: str  # "YYYY-MM"
+    consumedCount: int
+    discardedCount: int
+    consumedAmount: float
+    discardedAmount: float
+
+
+class TopDiscardedResponse(BaseModel):
+    name: str
+    count: int
+
+
+class WasteTotalsResponse(BaseModel):
+    discardedCount: int
+    consumedCount: int
+    savedAmount: float
+    wastedAmount: float
+
+
+class WasteReportResponse(BaseModel):
+    months: list[WasteMonthResponse] = Field(default_factory=list)
+    topDiscarded: list[TopDiscardedResponse] = Field(default_factory=list)
+    totals: WasteTotalsResponse

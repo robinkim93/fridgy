@@ -6,6 +6,7 @@ import { LoginScreen } from "./features/auth/LoginScreen";
 import { ReceiptFlow } from "./features/receipt/ReceiptFlow";
 import { InventoryScreen } from "./features/inventory/InventoryScreen";
 import { RecipeScreen } from "./features/recipe/RecipeScreen";
+import { ReportScreen } from "./features/report/ReportScreen";
 import { NotificationsScreen } from "./features/notifications/NotificationsScreen";
 import { NotificationBanner } from "./features/notifications/NotificationBanner";
 import { ActiveFridgeProvider } from "./features/fridge/useActiveFridge";
@@ -18,6 +19,7 @@ type AppPage =
   | "receipt"
   | "inventory"
   | "recipe"
+  | "report"
   | "notifications"
   | "fridgeManage";
 
@@ -95,6 +97,12 @@ function AppInner() {
     );
   }
 
+  if (currentPage === "report") {
+    return (
+      <ReportScreen onDashboardReturn={() => setCurrentPage("dashboard")} />
+    );
+  }
+
   if (currentPage === "notifications") {
     return (
       <NotificationsScreen
@@ -143,6 +151,13 @@ function AppInner() {
           className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 font-medium text-gray-700 hover:border-gray-400"
         >
           🍳 레시피 추천
+        </button>
+
+        <button
+          onClick={() => setCurrentPage("report")}
+          className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 font-medium text-gray-700 hover:border-gray-400"
+        >
+          📈 절약 리포트
         </button>
 
         <button
