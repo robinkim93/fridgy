@@ -5,12 +5,14 @@ interface UploadButtonProps {
   onJobCreated: (jobId: string) => void;
   onError: (message: string) => void;
   isLoading?: boolean;
+  fridgeId?: string;
 }
 
 export function UploadButton({
   onJobCreated,
   onError,
   isLoading = false,
+  fridgeId,
 }: UploadButtonProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -25,7 +27,7 @@ export function UploadButton({
 
     setUploading(true);
     try {
-      const { jobId } = await createReceipt(file);
+      const { jobId } = await createReceipt(file, fridgeId);
       onJobCreated(jobId);
     } catch (err) {
       onError(

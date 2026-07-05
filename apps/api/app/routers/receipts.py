@@ -7,6 +7,7 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     File,
+    Form,
     HTTPException,
     UploadFile,
     status,
@@ -27,6 +28,7 @@ _MAX_BYTES = 8 * 1024 * 1024  # 8MB
 def create_receipt(
     background: BackgroundTasks,
     file: UploadFile = File(...),
+    fridgeId: str | None = Form(default=None),
     user: AuthUser = Depends(get_current_user),
 ) -> ReceiptCreateResponse:
     if file.content_type not in _ALLOWED:
@@ -37,7 +39,10 @@ def create_receipt(
     if len(data) > _MAX_BYTES:
         raise HTTPException(413, "파일이 너무 큽니다(최대 8MB)")
 
-    fridge_id = db.get_or_create_personal_fridge(user.user_id)
+    try:
+        fridge_id, _ = db.resolve_fridge(user.user_id, fridgeId)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
     image_path = storage.upload_receipt(user.user_id, data, file.content_type)
     job_id = db.create_job(user.user_id, fridge_id, image_path)
 

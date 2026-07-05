@@ -3,6 +3,7 @@ import type { ParsedItem } from "@fridgy/shared";
 import { UploadButton } from "./UploadButton";
 import { ProcessingPoller } from "./ProcessingPoller";
 import { CorrectionForm } from "./CorrectionForm";
+import { useActiveFridge } from "../fridge/useActiveFridge";
 
 type FlowState = "upload" | "processing" | "correction" | "success";
 
@@ -11,6 +12,7 @@ interface ReceiptFlowProps {
 }
 
 export function ReceiptFlow({ onDashboardReturn }: ReceiptFlowProps) {
+  const { activeFridgeId } = useActiveFridge();
   const [state, setState] = useState<FlowState>("upload");
   const [jobId, setJobId] = useState<string>("");
   const [items, setItems] = useState<ParsedItem[]>([]);
@@ -55,7 +57,7 @@ export function ReceiptFlow({ onDashboardReturn }: ReceiptFlowProps) {
 
         {/* 상태별 UI */}
         {state === "upload" && (
-          <UploadButton onJobCreated={handleJobCreated} onError={setError} />
+          <UploadButton onJobCreated={handleJobCreated} onError={setError} fridgeId={activeFridgeId} />
         )}
 
         {state === "processing" && jobId && (
@@ -72,6 +74,7 @@ export function ReceiptFlow({ onDashboardReturn }: ReceiptFlowProps) {
             jobId={jobId || undefined}
             onSuccess={handleConfirmSuccess}
             onError={setError}
+            fridgeId={activeFridgeId}
           />
         )}
 

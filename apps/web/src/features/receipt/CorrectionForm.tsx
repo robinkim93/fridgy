@@ -7,6 +7,7 @@ interface CorrectionFormProps {
   jobId?: string;
   onSuccess: (itemIds: string[]) => void;
   onError: (message: string) => void;
+  fridgeId?: string;
 }
 
 const CATEGORIES: ItemCategory[] = [
@@ -27,6 +28,7 @@ export function CorrectionForm({
   jobId,
   onSuccess,
   onError,
+  fridgeId,
 }: CorrectionFormProps) {
   const [items, setItems] = useState<ParsedItem[]>(initialItems);
   const [confirming, setConfirming] = useState(false);
@@ -71,7 +73,7 @@ export function CorrectionForm({
 
     setConfirming(true);
     try {
-      const { itemIds } = await confirmInventory(items, jobId);
+      const { itemIds } = await confirmInventory(items, jobId, fridgeId);
       onSuccess(itemIds);
     } catch (err) {
       onError(

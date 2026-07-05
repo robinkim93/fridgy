@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InventoryItem } from "@fridgy/shared";
 import { consumeItems, getInventory, setExpiryOverride } from "../../lib/api";
+import { useActiveFridge } from "../fridge/useActiveFridge";
 
 interface InventoryScreenProps {
   onDashboardReturn: () => void;
@@ -43,24 +44,25 @@ function DdayBadge({ expireAt }: { expireAt: string | null }) {
 
 export function InventoryScreen({ onDashboardReturn }: InventoryScreenProps) {
   const queryClient = useQueryClient();
+  const { activeFridgeId } = useActiveFridge();
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["inventory"],
-    queryFn: getInventory,
+    queryKey: ["inventory", activeFridgeId],
+    queryFn: () => getInventory(activeFridgeId),
     retry: false,
   });
 
   const override = useMutation({
     mutationFn: ({ name, days }: { name: string; days: number }) =>
-      setExpiryOverride(name, days),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["inventory"] }),
+      setExpiryOverride(name, days, activeFridgeId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["inventory", activeFridgeId] }),
   });
 
   const consume = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "consumed" | "discarded" }) =>
-      consumeItems([id], action),
+      consumeItems([id], action, activeFridgeId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["inventory"] });
-      queryClient.invalidateQueries({ queryKey: ["recipes"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", activeFridgeId] });
+      queryClient.invalidateQueries({ queryKey: ["recipes", activeFridgeId] });
     },
   });
 
