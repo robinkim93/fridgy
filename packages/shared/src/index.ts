@@ -74,6 +74,55 @@ export interface RecipeSuggestion {
   cached: boolean; // 캐시 재사용 여부
 }
 
+/** 공유 냉장고 멤버십 역할 (F6) */
+export type FridgeRole = "owner" | "member";
+
+/** 사용자가 속한 냉장고 요약 (스위처용) */
+export interface FridgeSummary {
+  id: string;
+  name: string;
+  role: FridgeRole;
+  isOwner: boolean;
+}
+
+/** POST /fridges/{id}/invite 응답 — 만료형 초대 토큰 */
+export interface InviteCreated {
+  token: string;
+  role: FridgeRole;
+  expiresAt: string; // ISO 8601
+}
+
+/** GET /fridges/invites/{token} — 수락 화면용 미리보기(무인증) */
+export interface InviteInfo {
+  fridgeName: string;
+  role: FridgeRole;
+  expired: boolean;
+  accepted: boolean;
+}
+
+/** POST /fridges/invites/{token}/accept 응답 */
+export interface InviteAccepted {
+  fridgeId: string;
+  name: string;
+  alreadyMember: boolean;
+}
+
+/** 공유 냉장고 멤버 (F6) */
+export interface FridgeMember {
+  userId: string;
+  role: FridgeRole;
+  joinedAt: string; // ISO 8601
+}
+
+/** 변경 로그 항목 (F6 협업 신뢰용) */
+export interface FridgeActivity {
+  id: string;
+  actorUserId: string;
+  action: string; // added | consumed | discarded | member_joined | member_removed
+  detail: Record<string, unknown>;
+  createdAt: string; // ISO 8601
+}
+
 /** 임박 알림 (F3) */
 export interface Notification {
   id: string;

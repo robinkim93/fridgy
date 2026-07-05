@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .. import db
 from ..auth import AuthUser, get_current_user
@@ -26,10 +26,17 @@ def confirm_inventory(
     if not body.items:
         raise HTTPException(400, "확정할 품목이 없습니다")
 
-    fridge_id = db.get_or_create_personal_fridge(user.user_id)
+    try:
+        fridge_id, _ = db.resolve_fridge(user.user_id, body.fridgeId)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
     inserted = db.insert_inventory(
         user.user_id, fridge_id, [it.model_dump() for it in body.items]
     )
+    if inserted:
+        db.log_activity(
+            fridge_id, user.user_id, "added", {"count": len(inserted)}
+        )
 
     # 3차 학습(SD-3): 사용자가 최종 확정한 표기를 개인 사전에 남긴다.
     # 1차 결과와 다른 경우(=LLM 정규화 or 사용자 보정)만 저장해 사전 오염을 줄인다.
@@ -48,10 +55,14 @@ def confirm_inventory(
 
 @router.get("/inventory")
 def list_inventory(
+    fridgeId: str | None = Query(default=None),
     user: AuthUser = Depends(get_current_user),
 ) -> InventoryListResponse:
-    """활성 재고를 임박 순으로 조회(F2 임박 순 화면)."""
-    fridge_id = db.get_or_create_personal_fridge(user.user_id)
+    """활성 재고를 임박 순으로 조회(F2 임박 순 화면). fridgeId 미지정 시 개인 냉장고."""
+    try:
+        fridge_id, _ = db.resolve_fridge(user.user_id, fridgeId)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
     rows = db.list_inventory(fridge_id)
     items = [
         InventoryItemResponse(
@@ -77,7 +88,10 @@ def set_expiry_override(
 ) -> ExpiryOverrideResponse:
     """특정 품목의 소비일수를 개인화 보정하고, 활성 재고에 즉시 반영한다(F2 DoD)."""
     db.upsert_user_override(user.user_id, body.itemName, body.customDays)
-    fridge_id = db.get_or_create_personal_fridge(user.user_id)
+    try:
+        fridge_id, _ = db.resolve_fridge(user.user_id, body.fridgeId)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
     updated = db.recompute_expiry_for_name(
         fridge_id, body.itemName, body.customDays
     )

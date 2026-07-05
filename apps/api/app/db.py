@@ -40,7 +40,198 @@ def get_or_create_personal_fridge(user_id: str) -> str:
     if rows.data:
         return rows.data[0]["id"]
     created = c.table("fridges").insert({"owner_user_id": user_id}).execute()
-    return created.data[0]["id"]
+    fridge_id = created.data[0]["id"]
+    # 개인 냉장고 = owner 1명이 member로도 등록된 fridge (S5 공유 냉장고 정합성).
+    c.table("fridge_members").upsert(
+        {"fridge_id": fridge_id, "user_id": user_id, "role": "owner"},
+        on_conflict="fridge_id,user_id",
+    ).execute()
+    return fridge_id
+
+
+# ── 공유 냉장고: 멤버십·초대·변경로그 (S5) ─────────────────────────────────
+def list_user_fridges(user_id: str) -> list[dict]:
+    """사용자가 속한 모든 냉장고를 role·name과 함께 반환(fridge 스위처용)."""
+    c = get_client()
+    rows = (
+        c.table("fridge_members")
+        .select("role, fridge_id, fridges(id, name, owner_user_id)")
+        .eq("user_id", user_id)
+        .order("joined_at")
+        .execute()
+    )
+    out: list[dict] = []
+    for r in rows.data or []:
+        f = r.get("fridges") or {}
+        if not f:
+            continue
+        out.append(
+            {
+                "id": f["id"],
+                "name": f.get("name", "내 냉장고"),
+                "role": r["role"],
+                "isOwner": f.get("owner_user_id") == user_id,
+            }
+        )
+    return out
+
+
+def get_member_role(user_id: str, fridge_id: str) -> str | None:
+    """멤버십 역할(owner|member). 멤버가 아니면 None."""
+    c = get_client()
+    rows = (
+        c.table("fridge_members")
+        .select("role")
+        .eq("fridge_id", fridge_id)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    return rows.data[0]["role"] if rows.data else None
+
+
+def resolve_fridge(user_id: str, fridge_id: str | None) -> tuple[str, str]:
+    """요청의 대상 냉장고를 확정한다.
+
+    fridge_id 미지정 → 개인 냉장고(자동 생성). 지정 시 멤버십 검증.
+    반환: (fridge_id, role). 비멤버면 PermissionError.
+    """
+    if not fridge_id:
+        fid = get_or_create_personal_fridge(user_id)
+        return fid, "owner"
+    role = get_member_role(user_id, fridge_id)
+    if role is None:
+        raise PermissionError("이 냉장고의 멤버가 아닙니다")
+    return fridge_id, role
+
+
+def rename_fridge(fridge_id: str, name: str) -> None:
+    get_client().table("fridges").update({"name": name}).eq("id", fridge_id).execute()
+
+
+def create_invite(
+    fridge_id: str, created_by: str, role: str, expires_at: datetime
+) -> dict:
+    """만료형 초대 토큰 발급. 토큰은 DB default(gen_random_bytes)로 생성."""
+    c = get_client()
+    res = (
+        c.table("fridge_invites")
+        .insert(
+            {
+                "fridge_id": fridge_id,
+                "created_by": created_by,
+                "role": role,
+                "expires_at": expires_at.isoformat(),
+            }
+        )
+        .execute()
+    )
+    return res.data[0]
+
+
+def get_invite(token: str) -> dict | None:
+    c = get_client()
+    rows = (
+        c.table("fridge_invites")
+        .select("id, token, fridge_id, role, expires_at, accepted_at, fridges(name)")
+        .eq("token", token)
+        .limit(1)
+        .execute()
+    )
+    return rows.data[0] if rows.data else None
+
+
+def accept_invite(token: str, user_id: str) -> dict:
+    """초대 수락 → 멤버 편입. 만료/이미수락/이미멤버를 검증한다.
+
+    반환: {fridge_id, name, alreadyMember}.
+    """
+    inv = get_invite(token)
+    if inv is None:
+        raise ValueError("초대 링크가 유효하지 않습니다")
+    expires = datetime.fromisoformat(inv["expires_at"])
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if inv.get("accepted_at"):
+        raise ValueError("이미 사용된 초대 링크입니다")
+    if expires < datetime.now(timezone.utc):
+        raise ValueError("만료된 초대 링크입니다")
+
+    fridge_id = inv["fridge_id"]
+    name = (inv.get("fridges") or {}).get("name", "공유 냉장고")
+    already = get_member_role(user_id, fridge_id) is not None
+    c = get_client()
+    if not already:
+        c.table("fridge_members").insert(
+            {"fridge_id": fridge_id, "user_id": user_id, "role": inv["role"]}
+        ).execute()
+        log_activity(fridge_id, user_id, "member_joined", {})
+    c.table("fridge_invites").update(
+        {"accepted_by": user_id, "accepted_at": datetime.now(timezone.utc).isoformat()}
+    ).eq("id", inv["id"]).execute()
+    return {"fridgeId": fridge_id, "name": name, "alreadyMember": already}
+
+
+def list_members(fridge_id: str) -> list[dict]:
+    c = get_client()
+    rows = (
+        c.table("fridge_members")
+        .select("user_id, role, joined_at")
+        .eq("fridge_id", fridge_id)
+        .order("joined_at")
+        .execute()
+    )
+    return rows.data or []
+
+
+def remove_member(fridge_id: str, actor_user_id: str, target_user_id: str) -> bool:
+    """멤버 제거(owner 전용). owner 자신은 제거 불가. 제거 성공 시 True."""
+    if get_member_role(target_user_id, fridge_id) == "owner":
+        return False
+    c = get_client()
+    res = (
+        c.table("fridge_members")
+        .delete()
+        .eq("fridge_id", fridge_id)
+        .eq("user_id", target_user_id)
+        .execute()
+    )
+    removed = bool(res.data)
+    if removed:
+        log_activity(
+            fridge_id, actor_user_id, "member_removed", {"userId": target_user_id}
+        )
+    return removed
+
+
+def log_activity(
+    fridge_id: str, actor_user_id: str, action: str, detail: dict
+) -> None:
+    """변경 로그 적재(협업 신뢰용). 실패해도 본 흐름을 막지 않는다."""
+    try:
+        get_client().table("fridge_activity").insert(
+            {
+                "fridge_id": fridge_id,
+                "actor_user_id": actor_user_id,
+                "action": action,
+                "detail": detail,
+            }
+        ).execute()
+    except Exception:  # noqa: BLE001 - 로그 적재 실패는 본 요청을 실패시키지 않는다
+        pass
+
+
+def list_activity(fridge_id: str, limit: int = 50) -> list[dict]:
+    c = get_client()
+    rows = (
+        c.table("fridge_activity")
+        .select("id, actor_user_id, action, detail, created_at")
+        .eq("fridge_id", fridge_id)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return rows.data or []
 
 
 # ── 정규화 사전 ───────────────────────────────────────────────────────────

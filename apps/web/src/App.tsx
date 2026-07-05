@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getHealth } from "./lib/api";
 import { useAuth } from "./features/auth/useAuth";
@@ -8,19 +8,41 @@ import { InventoryScreen } from "./features/inventory/InventoryScreen";
 import { RecipeScreen } from "./features/recipe/RecipeScreen";
 import { NotificationsScreen } from "./features/notifications/NotificationsScreen";
 import { NotificationBanner } from "./features/notifications/NotificationBanner";
+import { ActiveFridgeProvider } from "./features/fridge/useActiveFridge";
+import { FridgeSwitcher } from "./features/fridge/FridgeSwitcher";
+import { FridgeManageScreen } from "./features/fridge/FridgeManageScreen";
+import { InviteAcceptScreen } from "./features/fridge/InviteAcceptScreen";
 
-type AppPage = "dashboard" | "receipt" | "inventory" | "recipe" | "notifications";
+type AppPage =
+  | "dashboard"
+  | "receipt"
+  | "inventory"
+  | "recipe"
+  | "notifications"
+  | "fridgeManage";
 
 // S1: 인증 + 영수증 재고 등록 UI
-export default function App() {
+function AppInner() {
   const { session, loading: authLoading } = useAuth();
   const [currentPage, setCurrentPage] = useState<AppPage>("dashboard");
+  const [inviteToken, setInviteToken] = useState<string>("");
+  const [showInviteAccept, setShowInviteAccept] = useState(false);
 
   const { data, isError, isLoading } = useQuery({
     queryKey: ["health"],
     queryFn: getHealth,
     retry: false,
   });
+
+  // 초대 파라미터 확인
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("invite");
+    if (token) {
+      setInviteToken(token);
+      setShowInviteAccept(true);
+    }
+  }, []);
 
   const apiStatus = isLoading
     ? "확인 중…"
@@ -35,6 +57,19 @@ export default function App() {
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600" />
         <p className="text-gray-500">로드 중…</p>
       </main>
+    );
+  }
+
+  // 초대 수락 화면 (로그인 상태 관계없이 우선)
+  if (showInviteAccept && inviteToken) {
+    return (
+      <InviteAcceptScreen
+        token={inviteToken}
+        onInviteAccepted={() => {
+          setShowInviteAccept(false);
+          setCurrentPage("dashboard");
+        }}
+      />
     );
   }
 
@@ -68,9 +103,19 @@ export default function App() {
     );
   }
 
+  if (currentPage === "fridgeManage") {
+    return (
+      <FridgeManageScreen onDashboardReturn={() => setCurrentPage("dashboard")} />
+    );
+  }
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-6 py-8">
+    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-6 px-6 py-8">
       <NotificationBanner />
+
+      <FridgeSwitcher
+        onManageClick={() => setCurrentPage("fridgeManage")}
+      />
 
       <div className="text-center">
         <div className="text-5xl mb-2">🧊</div>
@@ -124,5 +169,13 @@ export default function App() {
         로그아웃
       </button>
     </main>
+  );
+}
+
+export default function App() {
+  return (
+    <ActiveFridgeProvider>
+      <AppInner />
+    </ActiveFridgeProvider>
   );
 }

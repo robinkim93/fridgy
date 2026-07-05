@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .. import db, nim, recipes
 from ..auth import AuthUser, get_current_user
@@ -50,10 +50,14 @@ def _recipe_to_cache(r: Recipe) -> dict:
 
 @router.get("/recipes/suggest")
 def suggest(
+    fridgeId: str | None = Query(default=None),
     user: AuthUser = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
 ) -> RecipeSuggestResponse:
-    fridge_id = db.get_or_create_personal_fridge(user.user_id)
+    try:
+        fridge_id, _ = db.resolve_fridge(user.user_id, fridgeId)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
     rows = db.list_inventory(fridge_id)
     if not rows:
         raise HTTPException(400, "추천할 재고가 없습니다. 영수증으로 먼저 재고를 추가하세요.")
@@ -99,8 +103,13 @@ def consume(
     """요리 후 사용 재료를 소비 처리하거나(consumed) 폐기(discarded) 처리한다(F5)."""
     if not body.itemIds:
         raise HTTPException(400, "처리할 품목이 없습니다")
-    fridge_id = db.get_or_create_personal_fridge(user.user_id)
+    try:
+        fridge_id, _ = db.resolve_fridge(user.user_id, body.fridgeId)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
     updated = db.consume_inventory_items(
         user.user_id, fridge_id, body.itemIds, body.action
     )
+    if updated:
+        db.log_activity(fridge_id, user.user_id, body.action, {"count": updated})
     return ConsumeResponse(updated=updated)

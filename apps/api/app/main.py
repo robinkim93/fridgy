@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import AuthUser, get_current_user
 from .config import Settings, get_settings
-from .routers import internal, inventory, push, receipts, recipes
+from .routers import fridges, internal, inventory, push, receipts, recipes
 
 settings = get_settings()
 
@@ -18,6 +18,7 @@ app.add_middleware(
 )
 
 app.include_router(receipts.router)
+app.include_router(fridges.router)
 app.include_router(inventory.router)
 app.include_router(recipes.router)
 app.include_router(push.router)

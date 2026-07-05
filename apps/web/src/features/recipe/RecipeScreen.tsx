@@ -6,6 +6,7 @@ import {
   getInventory,
   getRecipeSuggestions,
 } from "../../lib/api";
+import { useActiveFridge } from "../fridge/useActiveFridge";
 
 interface RecipeScreenProps {
   onDashboardReturn: () => void;
@@ -92,6 +93,7 @@ function RecipeCard({ recipe, onCook }: { recipe: Recipe; onCook: () => void }) 
 
 export function RecipeScreen({ onDashboardReturn }: RecipeScreenProps) {
   const queryClient = useQueryClient();
+  const { activeFridgeId } = useActiveFridge();
   const [successMessage, setSuccessMessage] = useState<string>("");
 
   // 레시피 추천 조회
@@ -101,8 +103,8 @@ export function RecipeScreen({ onDashboardReturn }: RecipeScreenProps) {
     isError: suggestionsError,
     error: suggestionsErrorObj,
   } = useQuery({
-    queryKey: ["recipes"],
-    queryFn: getRecipeSuggestions,
+    queryKey: ["recipes", activeFridgeId],
+    queryFn: () => getRecipeSuggestions(activeFridgeId),
     retry: false,
   });
 
@@ -111,19 +113,19 @@ export function RecipeScreen({ onDashboardReturn }: RecipeScreenProps) {
     data: inventory,
     isLoading: inventoryLoading,
   } = useQuery({
-    queryKey: ["inventory"],
-    queryFn: getInventory,
+    queryKey: ["inventory", activeFridgeId],
+    queryFn: () => getInventory(activeFridgeId),
     retry: false,
   });
 
   // 소비 처리 mutation
   const consumeMutation = useMutation({
     mutationFn: (itemIds: string[]) =>
-      consumeItems(itemIds, "consumed"),
+      consumeItems(itemIds, "consumed", activeFridgeId),
     onSuccess: (result) => {
       // 무효화하여 재고와 레시피 모두 갱신
-      queryClient.invalidateQueries({ queryKey: ["inventory"] });
-      queryClient.invalidateQueries({ queryKey: ["recipes"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", activeFridgeId] });
+      queryClient.invalidateQueries({ queryKey: ["recipes", activeFridgeId] });
       setSuccessMessage(`소비 처리됨 ${result.updated}건`);
       setTimeout(() => setSuccessMessage(""), 3000);
     },

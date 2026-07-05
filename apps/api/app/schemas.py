@@ -35,6 +35,7 @@ class ReceiptJobResponse(BaseModel):
 
 class InventoryConfirmRequest(BaseModel):
     jobId: str | None = None
+    fridgeId: str | None = None  # 미지정 시 개인 냉장고(S5 공유 냉장고 스코프)
     items: list[ParsedItem]
 
 
@@ -63,6 +64,7 @@ class InventoryListResponse(BaseModel):
 
 
 class ExpiryOverrideRequest(BaseModel):
+    fridgeId: str | None = None
     itemName: str
     customDays: int = Field(gt=0, le=3650)
 
@@ -131,9 +133,75 @@ class RecipeSuggestResponse(BaseModel):
 
 
 class ConsumeRequest(BaseModel):
+    fridgeId: str | None = None
     itemIds: list[str]
     action: Literal["consumed", "discarded"] = "consumed"
 
 
 class ConsumeResponse(BaseModel):
     updated: int  # 상태 전이된 활성 품목 수
+
+
+# ── S5 공유 냉장고 (F6) ─────────────────────────────────────────────────────
+FridgeRole = Literal["owner", "member"]
+
+
+class FridgeSummary(BaseModel):
+    id: str
+    name: str
+    role: FridgeRole
+    isOwner: bool
+
+
+class FridgeListResponse(BaseModel):
+    items: list[FridgeSummary] = Field(default_factory=list)
+
+
+class FridgeRenameRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+
+
+class InviteCreateRequest(BaseModel):
+    role: FridgeRole = "member"
+    ttlHours: int = Field(default=72, gt=0, le=720)
+
+
+class InviteCreateResponse(BaseModel):
+    token: str
+    role: FridgeRole
+    expiresAt: str
+
+
+class InviteInfoResponse(BaseModel):
+    fridgeName: str
+    role: FridgeRole
+    expired: bool
+    accepted: bool
+
+
+class InviteAcceptResponse(BaseModel):
+    fridgeId: str
+    name: str
+    alreadyMember: bool
+
+
+class MemberResponse(BaseModel):
+    userId: str
+    role: FridgeRole
+    joinedAt: str
+
+
+class MemberListResponse(BaseModel):
+    items: list[MemberResponse] = Field(default_factory=list)
+
+
+class ActivityResponse(BaseModel):
+    id: str
+    actorUserId: str
+    action: str
+    detail: dict = Field(default_factory=dict)
+    createdAt: str
+
+
+class ActivityListResponse(BaseModel):
+    items: list[ActivityResponse] = Field(default_factory=list)
