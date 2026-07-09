@@ -24,7 +24,7 @@ class Normalized:
     category: str
     qty: float
     unit: str
-    matched_by: str  # user_alias | global_alias | lexicon | llm | unknown
+    matched_by: str  # user_alias | global_alias | product | lexicon | llm | unknown
 
 
 # ── 시드 렉시콘: 키워드(부분일치) → (표준명, 카테고리) ────────────────────
@@ -89,11 +89,32 @@ SEED_LEXICON: list[tuple[str, str, str]] = [
     ("맥주", "맥주", "음료"),
 ]
 
+# ── 완제품(조리·가공식품) 마커 ─────────────────────────────────────────────
+# 이 표현이 원문에 있으면 여러 재료가 결합된 '완제품'으로 보고, 대표 재료로 축약하지 않고
+# 원문 제품명을 통째로 보존한다(예: "명란크림우동", "꽈리고추 수육튀김").
+# 오탐 방지를 위해 단일 재료·브랜드 단어의 부분열이 되기 쉬운 표현(예: "국")은 제외한다.
+_PRODUCT_MARKERS: tuple[str, ...] = (
+    "우동", "라면", "국수", "파스타", "스파게티", "피자", "버거", "샌드위치",
+    "튀김", "볶음", "조림", "전골", "찌개", "구이", "무침", "조림", "찜",
+    "김밥", "덮밥", "비빔밥", "볶음밥", "도시락", "떡볶이", "만두", "돈까스",
+    "까스", "카츠", "그라탕", "리조또", "스테이크", "샐러드", "수육", "족발",
+    "치킨", "너겟", "핫도그", "소떡", "유부초밥", "쫄면", "냉면", "칼국수",
+)
+
+
+def is_prepared_product(raw_text: str) -> bool:
+    """원문이 조리·가공 완제품명인지 판정(대표 재료 축약 금지 대상)."""
+    s = raw_text.lower()
+    return any(m in s for m in _PRODUCT_MARKERS)
+
+
 # ── 정리(clean) 규칙 ───────────────────────────────────────────────────────
 # 용량/포장 노이즈만 제거한다. 브랜드는 통삭제하지 않는다
 # ("서울우유"의 "우유"처럼 제품명이 브랜드에 붙어 오는 경우가 많기 때문).
 # 용량/규격 토큰: 500g, 1kg, 1l, 1.8l, 2입, 30구, 묶음 등
 _SIZE_RE = re.compile(r"\d+(\.\d+)?\s*(kg|g|ml|l|리터|입|구|매|팩|봉|병|캔|호|인분)", re.I)
+# 가격 노이즈: 천단위 콤마 금액(26,000) 또는 '원' 표기
+_PRICE_RE = re.compile(r"\d{1,3}(?:,\d{3})+|\d+\s*원")
 _PACKAGING = ("행사", "할인", "1+1", "묶음", "특가", "국산", "수입산", "냉장", "봉지", "대용량")
 # 수량 추출: "2개"(숫자+단위) 또는 "x3"(선행 배수 표기)
 _QTY_UNIT_RE = re.compile(r"(\d+)\s*(개|봉|팩|병|캔|줄|송이|망|ea)\b", re.I)
@@ -113,6 +134,15 @@ def _clean_for_match(raw_text: str) -> str:
         s = s.replace(token, " ")
     # 특수문자·숫자 제거(수량은 별도 추출)
     s = re.sub(r"[^가-힣a-z ]", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def strip_noise(raw_text: str) -> str:
+    """표시용 이름에서 용량·포장·가격 노이즈만 제거(대소문자·원문 표기는 보존)."""
+    s = _PRICE_RE.sub(" ", raw_text)
+    s = _SIZE_RE.sub(" ", s)
+    for token in _PACKAGING:
+        s = s.replace(token, " ")
     return re.sub(r"\s+", " ", s).strip()
 
 
@@ -155,6 +185,12 @@ def first_pass(
     if global_aliases and key in global_aliases:
         name, cat = global_aliases[key]
         return Normalized(raw_text, name, cat or "기타", qty, unit, "global_alias")
+
+    # 2.5) 완제품(조리·가공식품)은 대표 재료로 축약하지 않고 원문 제품명을 보존.
+    #      LLM 정규화가 "명란크림우동→명란"처럼 앞 재료로 줄이는 것을 결정적으로 차단한다.
+    if is_prepared_product(raw_text):
+        name = strip_noise(raw_text) or raw_text.strip()
+        return Normalized(raw_text, name, "가공식품", qty, unit, "product")
 
     # 3) 시드 렉시콘 키워드 부분일치
     cleaned = _clean_for_match(raw_text)

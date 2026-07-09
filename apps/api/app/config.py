@@ -31,8 +31,18 @@ class Settings(BaseSettings):
     nim_api_key: str = ""
     nim_base_url: str = "https://integrate.api.nvidia.com/v1"
     # 모델 id는 배포 환경에서 override 가능(무료 티어 가용 모델에 맞춰 조정).
-    nim_ocr_model: str = "meta/llama-3.2-90b-vision-instruct"
-    nim_llm_model: str = "nvidia/llama-3.1-nemotron-70b-instruct"
+    # OCR 엔진 우선순위: Google Vision → CLOVA → NIM(폴백). 설정된 것 중 앞선 것을 사용.
+    # Google Cloud Vision (무료 티어 월 1,000건, 한국어 강함). GCP에서 Vision API 키 발급.
+    google_vision_api_key: str = ""
+    # Naver CLOVA OCR (한국어 영수증 특화, 유료 건당). NCP Receipt 도메인 Invoke URL·Secret.
+    clova_ocr_invoke_url: str = ""
+    clova_ocr_secret: str = ""
+
+    # OCR 폴백: 전용 다국어 OCR(nemotron-ocr-v2). 실패 시 VLM 폴백.
+    nim_ocr_infer_url: str = "https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2"
+    # VLM 폴백(전용 OCR 실패 시). 정규화·레시피(텍스트)도 이 모델 사용.
+    nim_ocr_model: str = "qwen/qwen3.5-397b-a17b"
+    nim_llm_model: str = "qwen/qwen3.5-397b-a17b"
 
     # Supabase Storage 영수증 버킷
     receipts_bucket: str = "receipts"
