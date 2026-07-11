@@ -1,51 +1,26 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InventoryItem } from "@fridgy/shared";
 import { consumeItems, getInventory, setExpiryOverride } from "../../lib/api";
 import { track } from "../../lib/track";
 import { useActiveFridge } from "../fridge/useActiveFridge";
+import { FridgeView } from "../../ui/FridgeView";
+import { CategoryIcon } from "../../ui/CategoryIcon";
+import { Button, Card, ExpiryBadge, Tag } from "../../ui/primitives";
+import { daysLeft } from "../../ui/expiry";
 
 interface InventoryScreenProps {
-  onDashboardReturn: () => void;
+  onAddReceipt: () => void;
 }
 
-/** expireAt(ISO date) → 오늘 기준 남은 일수. null이면 null. */
-function daysLeft(expireAt: string | null): number | null {
-  if (!expireAt) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const exp = new Date(expireAt + "T00:00:00");
-  return Math.round((exp.getTime() - today.getTime()) / 86_400_000);
-}
+type ViewMode = "fridge" | "list";
 
-function DdayBadge({ expireAt }: { expireAt: string | null }) {
-  const d = daysLeft(expireAt);
-  if (d === null) {
-    return (
-      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
-        미정
-      </span>
-    );
-  }
-  const { label, cls } =
-    d < 0
-      ? { label: `${-d}일 지남`, cls: "bg-red-100 text-red-700" }
-      : d === 0
-        ? { label: "D-day", cls: "bg-red-100 text-red-700" }
-        : d <= 2
-          ? { label: `D-${d}`, cls: "bg-orange-100 text-orange-700" }
-          : d <= 5
-            ? { label: `D-${d}`, cls: "bg-yellow-100 text-yellow-700" }
-            : { label: `D-${d}`, cls: "bg-green-100 text-green-700" };
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
-      {label}
-    </span>
-  );
-}
-
-export function InventoryScreen({ onDashboardReturn }: InventoryScreenProps) {
+export function InventoryScreen({ onAddReceipt }: InventoryScreenProps) {
   const queryClient = useQueryClient();
   const { activeFridgeId } = useActiveFridge();
+  const [view, setView] = useState<ViewMode>("fridge");
+  const [selected, setSelected] = useState<InventoryItem | null>(null);
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["inventory", activeFridgeId],
     queryFn: () => getInventory(activeFridgeId),
@@ -63,6 +38,7 @@ export function InventoryScreen({ onDashboardReturn }: InventoryScreenProps) {
       consumeItems([id], action, activeFridgeId),
     onSuccess: (_data, { action }) => {
       if (action === "discarded") track("item_discarded", {});
+      setSelected(null);
       queryClient.invalidateQueries({ queryKey: ["inventory", activeFridgeId] });
       queryClient.invalidateQueries({ queryKey: ["recipes", activeFridgeId] });
     },
@@ -83,83 +59,155 @@ export function InventoryScreen({ onDashboardReturn }: InventoryScreenProps) {
     override.mutate({ name: item.name, days });
   };
 
+  const busy = consume.isPending || override.isPending;
+
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 px-6 py-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-green-700">나의 재고</h1>
+    <div className="flex flex-col gap-4">
+      {/* 담기 CTA */}
+      <Button variant="primary" block onClick={onAddReceipt} className="py-3.5">
+        영수증으로 담기
+      </Button>
+
+      {/* 뷰 토글 (세그먼트) */}
+      <div className="flex gap-1 rounded-lg bg-muted p-1">
         <button
-          onClick={onDashboardReturn}
-          className="text-sm text-gray-500 hover:text-gray-700"
+          type="button"
+          onClick={() => setView("fridge")}
+          className={[
+            "press flex-1 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+            view === "fridge" ? "bg-surface text-brand-600 shadow-sm" : "text-ink-soft",
+          ].join(" ")}
         >
-          ← 대시보드
+          냉장고 보기
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("list")}
+          className={[
+            "press flex-1 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+            view === "list" ? "bg-surface text-brand-600 shadow-sm" : "text-ink-soft",
+          ].join(" ")}
+        >
+          목록 보기
         </button>
       </div>
-      <p className="text-sm text-gray-500">임박한 순서로 정렬됩니다.</p>
 
       {isLoading && (
-        <div className="flex justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-green-600" />
-        </div>
+        <Card className="p-6 text-center">
+          <p className="text-ink-soft">불러오는 중…</p>
+        </Card>
       )}
 
       {isError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {(error as Error).message}
-        </div>
+        <Card className="border-urgent/40 bg-urgent-tint p-3">
+          <p className="text-sm font-medium text-[#B91C1C]">{(error as Error).message}</p>
+        </Card>
       )}
 
       {data && data.length === 0 && (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 text-center text-gray-500">
-          아직 재고가 없어요. 영수증으로 추가해보세요.
-        </div>
+        <Card className="p-8 text-center">
+          <p className="font-semibold text-ink">냉장고가 비었어요.</p>
+          <p className="mt-1 text-sm text-ink-faint">영수증으로 재료를 채워보세요.</p>
+        </Card>
       )}
 
-      {data && data.length > 0 && (
+      {/* 냉장고 뷰 */}
+      {data && data.length > 0 && view === "fridge" && (
+        <FridgeView items={data} selectedId={selected?.id} onSelect={setSelected} />
+      )}
+
+      {/* 목록 뷰 (접근성 대체) */}
+      {data && data.length > 0 && view === "list" && (
         <ul className="flex flex-col gap-2">
           {data.map((item) => (
-            <li
-              key={item.id}
-              className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-gray-800">
-                  {item.name}
-                  <span className="ml-2 text-xs text-gray-400">
-                    {item.qty}
-                    {item.unit} · {item.category}
-                  </span>
-                </p>
-                <p className="text-xs text-gray-400">
-                  {item.expireAt ? `~ ${item.expireAt}` : "소비기한 미정"}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <DdayBadge expireAt={item.expireAt} />
-                <button
-                  onClick={() => handleAdjust(item)}
-                  disabled={override.isPending}
-                  className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:border-gray-400 disabled:opacity-50"
+            <li key={item.id}>
+              <Card className="flex items-center gap-3 p-2.5">
+                <CategoryIcon category={item.category} size={24} chipSize={40} title={item.name} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium text-ink">{item.name}</p>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <ExpiryBadge expireAt={item.expireAt} />
+                    <Tag>
+                      <span className="tnum">
+                        {item.qty}
+                        {item.unit}
+                      </span>
+                    </Tag>
+                  </div>
+                </div>
+                <Button
+                  variant="subtle"
+                  onClick={() => setSelected(item)}
+                  className="min-h-0 px-3 py-1.5 text-sm"
                 >
-                  조정
-                </button>
-                <button
-                  onClick={() => consume.mutate({ id: item.id, action: "consumed" })}
-                  disabled={consume.isPending}
-                  className="rounded-md border border-green-200 bg-green-50 px-2 py-1 text-xs text-green-700 hover:border-green-300 disabled:opacity-50"
-                >
-                  소비
-                </button>
-                <button
-                  onClick={() => consume.mutate({ id: item.id, action: "discarded" })}
-                  disabled={consume.isPending}
-                  className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700 hover:border-red-300 disabled:opacity-50"
-                >
-                  폐기
-                </button>
-              </div>
+                  관리
+                </Button>
+              </Card>
             </li>
           ))}
         </ul>
+      )}
+
+      {/* 선택 아이템 액션 시트 */}
+      {selected && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-ink/30"
+            onClick={() => setSelected(null)}
+            aria-hidden="true"
+          />
+          <Card
+            raised
+            role="dialog"
+            aria-label={`${selected.name} 관리`}
+            className="fixed inset-x-4 bottom-[84px] z-50 mx-auto max-w-md p-4"
+          >
+            <div className="flex items-center gap-3">
+              <CategoryIcon category={selected.category} size={30} chipSize={52} title={selected.name} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-lg font-bold text-ink">{selected.name}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <ExpiryBadge expireAt={selected.expireAt} />
+                  <Tag>{selected.category}</Tag>
+                  <Tag>
+                    <span className="tnum">
+                      {selected.qty}
+                      {selected.unit}
+                    </span>
+                  </Tag>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelected(null)}
+                aria-label="닫기"
+                className="press flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-faint hover:bg-muted hover:text-ink"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M6 6l12 12M18 6 6 18" />
+                </svg>
+              </button>
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <Button
+                variant="primary"
+                disabled={busy}
+                onClick={() => consume.mutate({ id: selected.id, action: "consumed" })}
+              >
+                소비
+              </Button>
+              <Button
+                variant="danger"
+                disabled={busy}
+                onClick={() => consume.mutate({ id: selected.id, action: "discarded" })}
+              >
+                폐기
+              </Button>
+              <Button variant="ghost" disabled={busy} onClick={() => handleAdjust(selected)}>
+                기한 조정
+              </Button>
+            </div>
+          </Card>
+        </>
       )}
     </div>
   );

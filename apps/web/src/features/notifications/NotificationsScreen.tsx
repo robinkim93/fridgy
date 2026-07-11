@@ -2,10 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Notification } from "@fridgy/shared";
 import { getNotifications, markNotificationRead } from "../../lib/api";
 
-interface NotificationsScreenProps {
-  onDashboardReturn: () => void;
-}
-
 /** ISO date → 상대 시간 (예: "2시간 전") */
 function formatRelativeTime(isoDate: string): string {
   const date = new Date(isoDate);
@@ -19,9 +15,7 @@ function formatRelativeTime(isoDate: string): string {
   return `${Math.floor(diffSeconds / 604800)}주 전`;
 }
 
-export function NotificationsScreen({
-  onDashboardReturn,
-}: NotificationsScreenProps) {
+export function NotificationsScreen() {
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error } = useQuery({
@@ -44,31 +38,23 @@ export function NotificationsScreen({
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 px-6 py-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-green-700">알림</h1>
-        <button
-          onClick={onDashboardReturn}
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          ← 대시보드
-        </button>
-      </div>
+    <div className="flex flex-col gap-4">
+      <h1 className="text-xl font-bold text-ink">알림</h1>
 
       {isLoading && (
         <div className="flex justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-line border-t-brand" />
         </div>
       )}
 
       {isError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded-lg border border-urgent/30 bg-urgent-tint p-3 text-sm text-[#B91C1C]">
           {(error as Error).message}
         </div>
       )}
 
       {data && data.items.length === 0 && (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 text-center text-gray-500">
+        <div className="rounded-lg border border-line bg-muted p-8 text-center text-ink-faint">
           아직 알림이 없어요.
         </div>
       )}
@@ -79,24 +65,20 @@ export function NotificationsScreen({
             <li
               key={notification.id}
               onClick={() => handleMarkRead(notification)}
-              className={`cursor-pointer rounded-lg border p-3 transition-colors ${
+              className={`press cursor-pointer rounded-lg border p-3 shadow-sm transition-colors ${
                 notification.readAt
-                  ? "border-gray-200 bg-white"
-                  : "border-blue-200 bg-blue-50"
-              } hover:border-gray-300`}
+                  ? "border-line bg-surface"
+                  : "border-brand-100 bg-brand-50"
+              } hover:border-line-strong`}
             >
               <div className="flex items-start gap-3">
                 {!notification.readAt && (
-                  <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-600" />
+                  <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900">
-                    {notification.title}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-700">
-                    {notification.body}
-                  </p>
-                  <p className="mt-2 text-xs text-gray-500">
+                  <p className="font-semibold text-ink">{notification.title}</p>
+                  <p className="mt-1 text-sm text-ink-soft">{notification.body}</p>
+                  <p className="tnum mt-2 text-xs text-ink-faint">
                     {formatRelativeTime(notification.createdAt)}
                   </p>
                 </div>

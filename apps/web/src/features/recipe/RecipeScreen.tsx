@@ -10,9 +10,7 @@ import {
 } from "../../lib/api";
 import { useActiveFridge } from "../fridge/useActiveFridge";
 
-interface RecipeScreenProps {
-  onDashboardReturn: () => void;
-}
+// GNB 셸의 탭 콘텐츠 — 자체 헤더/네비 없음.
 
 function RecipeCard({
   recipe,
@@ -35,29 +33,26 @@ function RecipeCard({
   ];
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full text-left"
-      >
+    <div className="rounded-lg border border-line bg-surface p-4 shadow-sm">
+      <button onClick={() => setExpanded(!expanded)} className="w-full text-left">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <h3 className="font-medium text-gray-800">{recipe.title}</h3>
+            <h3 className="font-semibold text-ink">{recipe.title}</h3>
             <div className="mt-2 flex flex-wrap gap-1">
               {chips.map((ing) =>
                 expiring.has(ing) ? (
-                  // 임박 재료: 강조 칩(주황)
+                  // 임박 재료: 강조 칩(앰버)
                   <span
                     key={ing}
-                    className="inline-block rounded-full bg-orange-100 px-2 py-1 text-xs font-medium text-orange-700"
+                    className="inline-block rounded-full bg-soon-tint px-2 py-1 text-xs font-semibold text-[#B45309]"
                   >
                     {ing}
                   </span>
                 ) : (
-                  // 일반 사용 재료: 파랑 칩
+                  // 일반 사용 재료
                   <span
                     key={ing}
-                    className="inline-block rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700"
+                    className="inline-block rounded-full bg-muted px-2 py-1 text-xs text-ink-soft"
                   >
                     {ing}
                   </span>
@@ -65,27 +60,30 @@ function RecipeCard({
               )}
             </div>
           </div>
-          <span className="shrink-0 text-gray-400">
-            {expanded ? "▼" : "▶"}
-          </span>
+          <svg
+            className={`shrink-0 text-ink-faint transition-transform ${expanded ? "rotate-90" : ""}`}
+            width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M9 6l6 6-6 6" />
+          </svg>
         </div>
       </button>
 
       {/* 부족 재료 표시 */}
       {recipe.missing.length > 0 && (
-        <p className="mt-2 text-xs text-gray-500">
-          필요: {recipe.missing.join(", ")}
-        </p>
+        <p className="mt-2 text-xs text-ink-faint">필요: {recipe.missing.join(", ")}</p>
       )}
 
       {/* 상세 펼침 */}
       {expanded && (
-        <div className="mt-4 space-y-3 border-t border-gray-200 pt-4">
+        <div className="mt-4 space-y-3 border-t border-line pt-4">
           <div>
-            <h4 className="text-sm font-medium text-gray-700">조리 단계</h4>
-            <ol className="mt-2 space-y-1">
+            <h4 className="text-sm font-semibold text-ink-soft">조리 단계</h4>
+            <ol className="tnum mt-2 space-y-1">
               {recipe.steps.map((step, idx) => (
-                <li key={idx} className="text-xs text-gray-600">
+                <li key={idx} className="text-xs text-ink-soft">
                   {idx + 1}. {step}
                 </li>
               ))}
@@ -94,16 +92,20 @@ function RecipeCard({
           <div className="flex gap-2">
             <button
               onClick={onCook}
-              className="flex-1 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+              className="press flex-1 rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
             >
               이 요리 만들었어요
             </button>
             <button
               onClick={onShare}
               disabled={sharing}
-              className="shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:border-gray-400 disabled:opacity-50"
+              className="press inline-flex shrink-0 items-center gap-1.5 rounded-md border border-line px-3 py-2 text-sm font-semibold text-ink-soft transition-colors hover:bg-muted disabled:opacity-50"
             >
-              {sharing ? "공유 중…" : "🔗 공유"}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+              </svg>
+              {sharing ? "공유 중…" : "공유"}
             </button>
           </div>
         </div>
@@ -112,7 +114,7 @@ function RecipeCard({
   );
 }
 
-export function RecipeScreen({ onDashboardReturn }: RecipeScreenProps) {
+export function RecipeScreen() {
   const queryClient = useQueryClient();
   const { activeFridgeId } = useActiveFridge();
   const [successMessage, setSuccessMessage] = useState<string>("");
@@ -213,28 +215,19 @@ export function RecipeScreen({ onDashboardReturn }: RecipeScreenProps) {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 px-6 py-8">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-green-700">레시피 추천</h1>
-        <button
-          onClick={onDashboardReturn}
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          ← 대시보드
-        </button>
-      </div>
+    <div className="flex flex-col gap-4">
+      <h1 className="text-xl font-bold text-ink">레시피 추천</h1>
 
       {/* 임박 재료 안내 */}
       {suggestions && suggestions.expiringNames.length > 0 && (
-        <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-700">
-          임박 재료 소진 우선: <span className="font-medium">{suggestions.expiringNames.join(", ")}</span>
+        <div className="rounded-lg border border-soon/30 bg-soon-tint p-3 text-sm text-[#B45309]">
+          임박 재료 소진 우선: <span className="font-semibold">{suggestions.expiringNames.join(", ")}</span>
         </div>
       )}
 
       {/* 성공 메시지 */}
       {successMessage && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+        <div className="rounded-lg border border-brand-100 bg-brand-50 p-3 text-sm font-medium text-brand-600">
           {successMessage}
         </div>
       )}
@@ -242,20 +235,20 @@ export function RecipeScreen({ onDashboardReturn }: RecipeScreenProps) {
       {/* 로딩 중 */}
       {(suggestionsLoading || inventoryLoading) && (
         <div className="flex justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-green-600" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-line border-t-brand" />
         </div>
       )}
 
       {/* 에러 표시 */}
       {suggestionsError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded-lg border border-urgent/30 bg-urgent-tint p-3 text-sm text-[#B91C1C]">
           {(suggestionsErrorObj as Error).message}
         </div>
       )}
 
       {/* 빈 상태 */}
       {suggestions && suggestions.items.length === 0 && (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 text-center text-gray-500">
+        <div className="rounded-lg border border-line bg-muted p-8 text-center text-ink-faint">
           추천할 재료가 부족해요. 재고를 더 추가해보세요.
         </div>
       )}

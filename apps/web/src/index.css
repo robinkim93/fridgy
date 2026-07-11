@@ -1,3 +1,104 @@
+/* Fridgy — "Fresh Pantry" 디자인 시스템
+ * 클린 플랫: 한글·라틴 모두 커버하는 Pretendard 단일 폰트.
+ * 토큰/컴포넌트 정의는 docs/design-system/MASTER.md 참조. */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    /* 표면 */
+    --canvas: #f6f9f8;
+    --surface: #ffffff;
+    --muted: #f1f5f4;
+    --line: #e5ebea;
+    --line-strong: #d3dbda;
+
+    /* 잉크(텍스트) */
+    --ink: #0f172a;
+    --ink-soft: #475569;
+    --ink-faint: #94a3b8;
+
+    /* 브랜드 — 그로서리 그린 */
+    --brand: #059669;
+    --brand-600: #047857;
+    --brand-100: #d1fae5;
+    --brand-50: #ecfdf5;
+
+    /* 액센트 — 식품 앰버 */
+    --accent: #d97706;
+
+    /* 소비기한 신호등 (제품 핵심 시그널) */
+    --fresh: #059669;
+    --soon: #f59e0b;
+    --urgent: #ef4444;
+
+    /* 냉장고 냉기 */
+    --frost-50: #f3f8fa;
+    --frost-100: #e7f0f4;
+    --frost-cool: #eaf2f9;
+    --steel: #e2e8ec;
+    --steel-line: #cbd5dd;
+  }
+
+  * {
+    border-color: var(--line);
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-family: "Pretendard Variable", Pretendard, -apple-system,
+      BlinkMacSystemFont, system-ui, "Malgun Gothic", sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3 {
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    font-weight: 700;
+  }
+
+  /* 키보드 포커스만 링 노출 */
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  /* 데이터 정렬용 등폭 숫자 (D-day·수량·금액) */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  /* 탭/버튼 눌림 — 살짝 축소(레이아웃 이동 없음) */
+  .press {
+    transition: transform 120ms ease-out;
+  }
+  .press:active {
+    transform: scale(0.97);
+  }
+
+  /* 긴급 아이템 은은한 맥동 (모션 축소 시 정지) */
+  @keyframes soft-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+  .pulse-urgent {
+    animation: soft-pulse 1.6s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pulse-urgent { animation: none; }
+    .press { transition: none; }
+  }
+}
